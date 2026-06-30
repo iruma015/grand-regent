@@ -1,0 +1,27 @@
+#ifndef PHYSICS_H
+#define PHYSICS_H
+
+#include <stdbool.h>
+#include "../combat/collision.h"
+
+#define GRAVITY 900.0f
+#define MAX_FALL_SPEED 600.0f
+#define JUMP_FORCE -420.0f
+
+// A moving, collidable box. One Physics_Step() call moves it by its velocity,
+// resolves it against the map's solid tiles, and reports whether it ended the
+// step standing on the ground.
+typedef struct {
+    float x, y;          // top-left, world pixels
+    float w, h;          // size, world pixels
+    float vx, vy;        // velocity, pixels/second
+    bool grounded;       // set by Physics_Step: true if resting on a floor
+} Body;
+
+// Applies gravity, then moves and collides one axis at a time (horizontal
+// then vertical). Resolving each axis right after moving on it is what keeps
+// the body from snagging on tile corners/seams when jumping or running along
+// walls. Mutates body->x/y/vx/vy/grounded in place.
+void Physics_Step(Body *body, const Map *map, float dt);
+
+#endif

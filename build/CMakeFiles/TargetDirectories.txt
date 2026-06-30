@@ -1,0 +1,3 @@
+/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir
+/home/irumachi/game_new/build/CMakeFiles/edit_cache.dir
+/home/irumachi/game_new/build/CMakeFiles/rebuild_cache.dir

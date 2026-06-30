@@ -1,0 +1,92 @@
+[
+{
+  "directory": "/home/irumachi/game_new/build",
+  "command": "/usr/bin/gcc -I/home/irumachi/game_new/src -I/home/irumachi/game_new/src/third_party -g -std=gnu11 -o CMakeFiles/grand-regent.dir/src/main.c.o -c /home/irumachi/game_new/src/main.c",
+  "file": "/home/irumachi/game_new/src/main.c",
+  "output": "/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir/src/main.c.o"
+},
+{
+  "directory": "/home/irumachi/game_new/build",
+  "command": "/usr/bin/gcc -I/home/irumachi/game_new/src -I/home/irumachi/game_new/src/third_party -g -std=gnu11 -o CMakeFiles/grand-regent.dir/src/core/game.c.o -c /home/irumachi/game_new/src/core/game.c",
+  "file": "/home/irumachi/game_new/src/core/game.c",
+  "output": "/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir/src/core/game.c.o"
+},
+{
+  "directory": "/home/irumachi/game_new/build",
+  "command": "/usr/bin/gcc -I/home/irumachi/game_new/src -I/home/irumachi/game_new/src/third_party -g -std=gnu11 -o CMakeFiles/grand-regent.dir/src/core/camera.c.o -c /home/irumachi/game_new/src/core/camera.c",
+  "file": "/home/irumachi/game_new/src/core/camera.c",
+  "output": "/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir/src/core/camera.c.o"
+},
+{
+  "directory": "/home/irumachi/game_new/build",
+  "command": "/usr/bin/gcc -I/home/irumachi/game_new/src -I/home/irumachi/game_new/src/third_party -g -std=gnu11 -o CMakeFiles/grand-regent.dir/src/core/texture.c.o -c /home/irumachi/game_new/src/core/texture.c",
+  "file": "/home/irumachi/game_new/src/core/texture.c",
+  "output": "/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir/src/core/texture.c.o"
+},
+{
+  "directory": "/home/irumachi/game_new/build",
+  "command": "/usr/bin/gcc -I/home/irumachi/game_new/src -I/home/irumachi/game_new/src/third_party -g -std=gnu11 -o CMakeFiles/grand-regent.dir/src/world/map.c.o -c /home/irumachi/game_new/src/world/map.c",
+  "file": "/home/irumachi/game_new/src/world/map.c",
+  "output": "/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir/src/world/map.c.o"
+},
+{
+  "directory": "/home/irumachi/game_new/build",
+  "command": "/usr/bin/gcc -I/home/irumachi/game_new/src -I/home/irumachi/game_new/src/third_party -g -std=gnu11 -o CMakeFiles/grand-regent.dir/src/world/tmj_loader.c.o -c /home/irumachi/game_new/src/world/tmj_loader.c",
+  "file": "/home/irumachi/game_new/src/world/tmj_loader.c",
+  "output": "/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir/src/world/tmj_loader.c.o"
+},
+{
+  "directory": "/home/irumachi/game_new/build",
+  "command": "/usr/bin/gcc -I/home/irumachi/game_new/src -I/home/irumachi/game_new/src/third_party -g -std=gnu11 -o CMakeFiles/grand-regent.dir/src/entities/animation.c.o -c /home/irumachi/game_new/src/entities/animation.c",
+  "file": "/home/irumachi/game_new/src/entities/animation.c",
+  "output": "/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir/src/entities/animation.c.o"
+},
+{
+  "directory": "/home/irumachi/game_new/build",
+  "command": "/usr/bin/gcc -I/home/irumachi/game_new/src -I/home/irumachi/game_new/src/third_party -g -std=gnu11 -o CMakeFiles/grand-regent.dir/src/entities/physics.c.o -c /home/irumachi/game_new/src/entities/physics.c",
+  "file": "/home/irumachi/game_new/src/entities/physics.c",
+  "output": "/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir/src/entities/physics.c.o"
+},
+{
+  "directory": "/home/irumachi/game_new/build",
+  "command": "/usr/bin/gcc -I/home/irumachi/game_new/src -I/home/irumachi/game_new/src/third_party -g -std=gnu11 -o CMakeFiles/grand-regent.dir/src/entities/player.c.o -c /home/irumachi/game_new/src/entities/player.c",
+  "file": "/home/irumachi/game_new/src/entities/player.c",
+  "output": "/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir/src/entities/player.c.o"
+},
+{
+  "directory": "/home/irumachi/game_new/build",
+  "command": "/usr/bin/gcc -I/home/irumachi/game_new/src -I/home/irumachi/game_new/src/third_party -g -std=gnu11 -o CMakeFiles/grand-regent.dir/src/entities/enemy.c.o -c /home/irumachi/game_new/src/entities/enemy.c",
+  "file": "/home/irumachi/game_new/src/entities/enemy.c",
+  "output": "/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir/src/entities/enemy.c.o"
+},
+{
+  "directory": "/home/irumachi/game_new/build",
+  "command": "/usr/bin/gcc -I/home/irumachi/game_new/src -I/home/irumachi/game_new/src/third_party -g -std=gnu11 -o CMakeFiles/grand-regent.dir/src/entities/boss.c.o -c /home/irumachi/game_new/src/entities/boss.c",
+  "file": "/home/irumachi/game_new/src/entities/boss.c",
+  "output": "/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir/src/entities/boss.c.o"
+},
+{
+  "directory": "/home/irumachi/game_new/build",
+  "command": "/usr/bin/gcc -I/home/irumachi/game_new/src -I/home/irumachi/game_new/src/third_party -g -std=gnu11 -o CMakeFiles/grand-regent.dir/src/combat/collision.c.o -c /home/irumachi/game_new/src/combat/collision.c",
+  "file": "/home/irumachi/game_new/src/combat/collision.c",
+  "output": "/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir/src/combat/collision.c.o"
+},
+{
+  "directory": "/home/irumachi/game_new/build",
+  "command": "/usr/bin/gcc -I/home/irumachi/game_new/src -I/home/irumachi/game_new/src/third_party -g -std=gnu11 -o CMakeFiles/grand-regent.dir/src/combat/hitbox.c.o -c /home/irumachi/game_new/src/combat/hitbox.c",
+  "file": "/home/irumachi/game_new/src/combat/hitbox.c",
+  "output": "/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir/src/combat/hitbox.c.o"
+},
+{
+  "directory": "/home/irumachi/game_new/build",
+  "command": "/usr/bin/gcc -I/home/irumachi/game_new/src -I/home/irumachi/game_new/src/third_party -g -std=gnu11 -o CMakeFiles/grand-regent.dir/src/combat/skill.c.o -c /home/irumachi/game_new/src/combat/skill.c",
+  "file": "/home/irumachi/game_new/src/combat/skill.c",
+  "output": "/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir/src/combat/skill.c.o"
+},
+{
+  "directory": "/home/irumachi/game_new/build",
+  "command": "/usr/bin/gcc -I/home/irumachi/game_new/src -I/home/irumachi/game_new/src/third_party -g -std=gnu11 -o CMakeFiles/grand-regent.dir/src/third_party/cJSON.c.o -c /home/irumachi/game_new/src/third_party/cJSON.c",
+  "file": "/home/irumachi/game_new/src/third_party/cJSON.c",
+  "output": "/home/irumachi/game_new/build/CMakeFiles/grand-regent.dir/src/third_party/cJSON.c.o"
+}
+]
