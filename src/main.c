@@ -16,10 +16,11 @@ int main(int argc, char *argv[]) {
     game->win.width = 1600;
     game->win.height = 900;
     // Logical (render) resolution. Smaller = more zoomed in, so everything on
-    // screen looks bigger. 480x270 is 16:9 like the window, so it scales up
-    // cleanly with no letterbox bars. Lower these to zoom in further.
-    game->win.logW = 480;
-    game->win.logH = 270;
+    // screen looks bigger. 960x540 is 16:9 like the window, so it scales up
+    // cleanly with no letterbox bars, and shows ~30 tiles across — matching the
+    // original SDL2 build's zoom. Lower these to zoom in further.
+    game->win.logW = 960;
+    game->win.logH = 540;
 
     if (!Game_Init(game)) {
         SDL_Log("Failed to initialize game");

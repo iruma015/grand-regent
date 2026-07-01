@@ -54,25 +54,6 @@ static bool StrContainsCI(const char *haystack, const char *needle) {
     return false;
 }
 
-// Like StrContainsCI but requires the match to be a whole word (surrounded by
-// non-alpha characters or string edges). This prevents "background" matching
-// "ground", which would otherwise mark every background layer as solid.
-static bool StrContainsWordCI(const char *haystack, const char *needle) {
-    if (!haystack || !*haystack) return false;
-    size_t hn = strlen(haystack), nn = strlen(needle);
-    if (nn > hn) return false;
-    for (size_t i = 0; i + nn <= hn; i++) {
-        if (i > 0 && isalpha((unsigned char)haystack[i - 1])) continue;
-        if (i + nn < hn && isalpha((unsigned char)haystack[i + nn])) continue;
-        size_t j = 0;
-        for (; j < nn; j++) {
-            if (tolower((unsigned char)haystack[i + j]) != tolower((unsigned char)needle[j])) break;
-        }
-        if (j == nn) return true;
-    }
-    return false;
-}
-
 static SpawnType ClassifySpawn(const char *name, const char *type) {
     if (StrContainsCI(name, "player") || StrContainsCI(type, "player")) return SPAWN_PLAYER;
     if (StrContainsCI(name, "boss") || StrContainsCI(type, "boss")) return SPAWN_BOSS;
@@ -172,8 +153,10 @@ bool Map_LoadFromTMJ(Map *map, const char *tmjPath, TextureManager *texManager) 
             if (cJSON_IsString(jName)) {
                 SDL_strlcpy(layer->name, jName->valuestring, sizeof(layer->name));
             }
-            layer->isCollision = StrContainsWordCI(layer->name, "ground") ||
-                                  StrContainsCI(layer->name, "collision");
+            // Match the SDL2 build: only the layer literally named "first-ground"
+            // is solid. Other ground-ish layers (e.g. "second ground") are purely
+            // decorative, exactly as in sdl2_tilemap_merged.
+            layer->isCollision = SDL_strcasecmp(layer->name, "first-ground") == 0;
 
             cJSON *jData = cJSON_GetObjectItemCaseSensitive(jLayer, "data");
             int total = map->width * map->height;

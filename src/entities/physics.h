@@ -4,9 +4,13 @@
 #include <stdbool.h>
 #include "../combat/collision.h"
 
-#define GRAVITY 900.0f
-#define MAX_FALL_SPEED 600.0f
-#define JUMP_FORCE -420.0f
+// These are doubled from their original values to match the 2x map zoom-out
+// (logical resolution 480x270 -> 960x540): doubling the world-space gravity and
+// jump velocity keeps the jump ARC looking the same on screen as before, rather
+// than a tiny half-height hop at the more zoomed-out scale.
+#define GRAVITY 1800.0f
+#define MAX_FALL_SPEED 1200.0f
+#define JUMP_FORCE -840.0f
 
 // Falling pulls harder than rising. This is a classic "game feel" trick: the
 // jump keeps its full height on the way up (so level gaps stay clearable), but

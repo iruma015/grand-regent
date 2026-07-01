@@ -3,17 +3,17 @@
 #include <math.h>
 #include <string.h>
 
-#define BOSS_WIDTH 76.0f
-#define BOSS_HEIGHT 88.0f
-#define BOSS_SPEED 80.0f
-#define BOSS_DETECTION_RANGE 260.0f
+#define BOSS_WIDTH 120.0f
+#define BOSS_HEIGHT 144.0f
+#define BOSS_SPEED 160.0f
+#define BOSS_DETECTION_RANGE 460.0f
 #define BOSS_MAX_HEALTH 200
 #define BOSS_HURT_TIME 0.25f
 
 // Data-driven skill table. Add a row, bump BOSS_SKILL_COUNT, done.
 static const BossSkillDef BOSS_SKILLS[] = {
-    { "Slash",       2.0f, 60.0f, 15, 0.30f, 0.15f, 0.30f, 5, 0.12f },
-    { "Heavy Smash",  3.5f, 90.0f, 25, 0.50f, 0.25f, 0.55f, 6, 0.10f },
+    { "Slash",       2.0f, 110.0f, 15, 0.30f, 0.15f, 0.30f, 5, 0.12f },
+    { "Heavy Smash",  3.5f, 150.0f, 25, 0.50f, 0.25f, 0.55f, 6, 0.10f },
 };
 #define BOSS_SKILL_COUNT (int)(sizeof(BOSS_SKILLS) / sizeof(BOSS_SKILLS[0]))
 
@@ -91,7 +91,7 @@ void Boss_Update(Boss *boss, Player *player, float dt, const Map *gameMap, Hitbo
         case BOSS_IDLE: {
             if (distance < BOSS_DETECTION_RANGE) {
                 const BossSkillDef *def = (boss->currentSkill >= 0) ? &boss->skills[boss->currentSkill] : NULL;
-                float engageRange = def ? def->range : 70.0f;
+                float engageRange = def ? def->range : 120.0f;
 
                 if (distance > engageRange) {
                     boss->velocityX = facingRight ? BOSS_SPEED : -BOSS_SPEED;
@@ -137,8 +137,8 @@ void Boss_Update(Boss *boss, Player *player, float dt, const Map *gameMap, Hitbo
             const BossSkillDef *def = &boss->skills[boss->currentSkill];
             if (!boss->hitboxSpawnedThisAttack && hitboxes) {
                 Rect range = SkillRange(boss, def);
-                float kbX = facingRight ? 160.0f : -160.0f;
-                HitboxList_Spawn(hitboxes, range, def->damage, HITBOX_SOURCE_BOSS, 0, kbX, -70.0f, 0.1f);
+                float kbX = facingRight ? 320.0f : -320.0f;
+                HitboxList_Spawn(hitboxes, range, def->damage, HITBOX_SOURCE_BOSS, 0, kbX, -140.0f, 0.1f);
                 boss->hitboxSpawnedThisAttack = true;
             }
 

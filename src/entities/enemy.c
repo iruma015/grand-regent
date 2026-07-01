@@ -2,14 +2,21 @@
 #include "physics.h"
 #include <math.h>
 
-#define ENEMY_WIDTH 44.0f
-#define ENEMY_HEIGHT 60.0f
-#define ENEMY_SPEED 60.0f
-#define ENEMY_ATTACK_RANGE 30.0f
+#define ENEMY_WIDTH 48.0f
+#define ENEMY_HEIGHT 72.0f
+#define ENEMY_SPEED 130.0f
+#define ENEMY_ATTACK_RANGE 55.0f
 #define ENEMY_ATTACK_DAMAGE 10
 #define ENEMY_ATTACK_COOLDOWN 1.2f
 #define ENEMY_ATTACK_ACTIVE_FRAME 2
-#define ENEMY_DETECTION_RANGE 140.0f
+#define ENEMY_DETECTION_RANGE 300.0f
+
+// The sprite frame is 48x48 but the character only fills part of it; draw it at
+// 2x (like the player) so the enemy reads at a comparable on-screen size. The
+// physics/collision body stays ENEMY_WIDTH x ENEMY_HEIGHT; the sprite is
+// centered horizontally over it and bottom-aligned (feet on the ground).
+#define ENEMY_RENDER_WIDTH  96.0f
+#define ENEMY_RENDER_HEIGHT 96.0f
 #define ENEMY_MAX_HEALTH 30
 #define ENEMY_HURT_TIME 0.2f
 
@@ -112,10 +119,10 @@ void Enemy_Update(Enemy *enemy, Player *player, int enemyIndex, float dt, const 
 
             if (!enemy->attackHitboxSpawned && enemy->attackAnim.currentFrame >= ENEMY_ATTACK_ACTIVE_FRAME) {
                 Rect range = Enemy_GetAttackRange(enemy);
-                float kbX = (player->x >= enemy->x) ? 90.0f : -90.0f;
+                float kbX = (player->x >= enemy->x) ? 180.0f : -180.0f;
                 if (hitboxes) {
                     HitboxList_Spawn(hitboxes, range, ENEMY_ATTACK_DAMAGE,
-                                      HITBOX_SOURCE_ENEMY, enemyIndex, kbX, -30.0f, 0.08f);
+                                      HITBOX_SOURCE_ENEMY, enemyIndex, kbX, -60.0f, 0.08f);
                 }
                 enemy->attackHitboxSpawned = true;
             }
@@ -159,12 +166,23 @@ int Enemy_IsAlive(Enemy *enemy) {
 void Enemy_Render(Enemy *enemy, SDL_Renderer *renderer, const Camera *camera) {
     if (enemy->state == ENEMY_DEAD) return;
 
-    SDL_FRect worldDst = { enemy->x, enemy->y, ENEMY_WIDTH, ENEMY_HEIGHT };
-    SDL_FRect dst = camera ? Camera_ToScreen(camera, worldDst) : worldDst;
+    // Physics/collision body (anchors the fallback block + health bar).
+    SDL_FRect worldBody = { enemy->x, enemy->y, ENEMY_WIDTH, ENEMY_HEIGHT };
+    SDL_FRect bodyDst = camera ? Camera_ToScreen(camera, worldBody) : worldBody;
+
+    // Sprite frame drawn larger than the body: centered horizontally over it and
+    // bottom-aligned so the feet line up with the body's bottom (the ground).
+    SDL_FRect worldSprite = {
+        enemy->x + ENEMY_WIDTH * 0.5f - ENEMY_RENDER_WIDTH * 0.5f,
+        enemy->y + ENEMY_HEIGHT - ENEMY_RENDER_HEIGHT,
+        ENEMY_RENDER_WIDTH,
+        ENEMY_RENDER_HEIGHT
+    };
+    SDL_FRect dst = camera ? Camera_ToScreen(camera, worldSprite) : worldSprite;
 
     if (!enemy->texture) {
         SDL_SetRenderDrawColor(renderer, 0, 200, 50, 255);
-        SDL_RenderFillRect(renderer, &dst);
+        SDL_RenderFillRect(renderer, &bodyDst);
     } else {
         int frameWidth = 48;
         int frameHeight = 48;
@@ -195,12 +213,15 @@ void Enemy_Render(Enemy *enemy, SDL_Renderer *renderer, const Camera *camera) {
                 (enemy->flipHorizontal) ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
     }
 
-    SDL_FRect healthBarBg = { dst.x, dst.y - 5, ENEMY_WIDTH, 2 };
+    // Health bar over the body's width, just above the character's head.
+    float barX = bodyDst.x;
+    float barY = dst.y + 4.0f;
+    SDL_FRect healthBarBg = { barX, barY, ENEMY_WIDTH, 2 };
     SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
     SDL_RenderFillRect(renderer, &healthBarBg);
 
     float healthPercent = (float)enemy->health / (float)enemy->maxHealth;
-    SDL_FRect healthBar = { dst.x, dst.y - 5, ENEMY_WIDTH * healthPercent, 2 };
+    SDL_FRect healthBar = { barX, barY, ENEMY_WIDTH * healthPercent, 2 };
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
     SDL_RenderFillRect(renderer, &healthBar);
 }

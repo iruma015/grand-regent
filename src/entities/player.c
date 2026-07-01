@@ -8,17 +8,25 @@
 
 #define PLAYER_WIDTH 64.0f
 #define PLAYER_HEIGHT 64.0f
-#define PLAYER_SPEED 130.0f
+#define PLAYER_SPEED 280.0f
+
+// The sprite frame is 64x64 but the character only fills part of it. Draw the
+// frame at 2x (128x128) so the character appears at the same on-screen size as
+// the original SDL2 build (which rendered the 64px frame at SPRITE_SCALE=2).
+// The physics/collision body stays PLAYER_WIDTH x PLAYER_HEIGHT; the sprite is
+// centered horizontally over it and bottom-aligned so the feet rest on ground.
+#define PLAYER_RENDER_WIDTH  128.0f
+#define PLAYER_RENDER_HEIGHT 128.0f
 
 // --- Movement feel ---------------------------------------------------------
 // Rather than snapping horizontal velocity to ±SPEED (which feels robotic), the
 // player accelerates toward the target speed and decays via friction when no
 // key is held. Air control is weaker than ground control so mid-air steering
 // feels committed. Values are pixels/second^2.
-#define PLAYER_GROUND_ACCEL    1600.0f
-#define PLAYER_AIR_ACCEL        900.0f
-#define PLAYER_GROUND_FRICTION 1500.0f
-#define PLAYER_AIR_FRICTION     600.0f
+#define PLAYER_GROUND_ACCEL    3400.0f
+#define PLAYER_AIR_ACCEL       1900.0f
+#define PLAYER_GROUND_FRICTION 3200.0f
+#define PLAYER_AIR_FRICTION    1300.0f
 
 // Jump forgiveness windows (seconds). Coyote time lets a jump fire just after
 // walking off a ledge; the jump buffer lets a jump pressed just before landing
@@ -29,7 +37,7 @@
 // hop, hold for a full jump (variable jump height).
 #define PLAYER_JUMP_CUT     0.45f
 
-#define PLAYER_ATTACK_RANGE 44.0f
+#define PLAYER_ATTACK_RANGE 80.0f
 #define PLAYER_ATTACK_DAMAGE 15
 #define PLAYER_ATTACK_COOLDOWN 0.6f
 #define PLAYER_ATTACK_ACTIVE_FRAME 2 // frame index where the swing's hitbox becomes live
@@ -39,7 +47,7 @@
 // --- Circular hurtbox (adjust freely) -------------------------------------
 // Radius of the player's body hitbox, and where its center sits relative to
 // the sprite's top-left. Defaults put it at the center of the 64x64 body.
-#define PLAYER_HITBOX_RADIUS    24.0f
+#define PLAYER_HITBOX_RADIUS    34.0f
 #define PLAYER_HITBOX_OFFSET_X  (PLAYER_WIDTH * 0.5f)
 #define PLAYER_HITBOX_OFFSET_Y  (PLAYER_HEIGHT * 0.5f)
 
@@ -84,11 +92,11 @@ void Player_Init(Player *player, float x, float y, SDL_Texture *texture) {
     // Skills are just data -- add a row here to give the player a new ability.
     player->skillCount = 0;
     Skill_Init(&player->skills[player->skillCount++], "Heavy Strike", SDL_SCANCODE_K,
-               /*cooldown*/ 2.0f, /*damage*/ 30, /*range*/ 55.0f,
-               /*knockbackX*/ 140.0f, /*knockbackY*/ -60.0f);
+               /*cooldown*/ 2.0f, /*damage*/ 30, /*range*/ 100.0f,
+               /*knockbackX*/ 280.0f, /*knockbackY*/ -120.0f);
     Skill_Init(&player->skills[player->skillCount++], "Dash Strike", SDL_SCANCODE_L,
-               /*cooldown*/ 3.0f, /*damage*/ 20, /*range*/ 70.0f,
-               /*knockbackX*/ 220.0f, /*knockbackY*/ 0.0f);
+               /*cooldown*/ 3.0f, /*damage*/ 20, /*range*/ 130.0f,
+               /*knockbackX*/ 440.0f, /*knockbackY*/ 0.0f);
 }
 
 Rect Player_GetAttackRange(const Player *player) {
@@ -266,8 +274,8 @@ void Player_Update(Player *player, float dt, const Map *gameMap, HitboxList *hit
                 } else {
                     range = Player_GetAttackRange(player);
                     damage = PLAYER_ATTACK_DAMAGE;
-                    kbX = player->flipHorizontal ? -120.0f : 120.0f;
-                    kbY = -40.0f;
+                    kbX = player->flipHorizontal ? -240.0f : 240.0f;
+                    kbY = -80.0f;
                 }
                 if (hitboxes) {
                     HitboxList_Spawn(hitboxes, range, damage, HITBOX_SOURCE_PLAYER, 0, kbX, kbY, 0.08f);
@@ -331,12 +339,23 @@ int Player_IsAlive(Player *player) {
 }
 
 void Player_Render(Player *player, SDL_Renderer *renderer, const Camera *camera) {
-    SDL_FRect worldDst = { player->x, player->y, PLAYER_WIDTH, PLAYER_HEIGHT };
-    SDL_FRect dst = camera ? Camera_ToScreen(camera, worldDst) : worldDst;
+    // Physics/collision body in world space (anchors the fallback block + HUD).
+    SDL_FRect worldBody = { player->x, player->y, PLAYER_WIDTH, PLAYER_HEIGHT };
+    SDL_FRect bodyDst = camera ? Camera_ToScreen(camera, worldBody) : worldBody;
+
+    // Sprite frame drawn larger than the body: centered horizontally over it and
+    // bottom-aligned so the feet line up with the body's bottom (the ground).
+    SDL_FRect worldSprite = {
+        player->x + PLAYER_WIDTH * 0.5f - PLAYER_RENDER_WIDTH * 0.5f,
+        player->y + PLAYER_HEIGHT - PLAYER_RENDER_HEIGHT,
+        PLAYER_RENDER_WIDTH,
+        PLAYER_RENDER_HEIGHT
+    };
+    SDL_FRect dst = camera ? Camera_ToScreen(camera, worldSprite) : worldSprite;
 
     if (!player->texture) {
         SDL_SetRenderDrawColor(renderer, 0, 200, 50, 255);
-        SDL_RenderFillRect(renderer, &dst);
+        SDL_RenderFillRect(renderer, &bodyDst);
     } else {
         int frameWidth = 64;
         int frameHeight = 64;
@@ -369,12 +388,16 @@ void Player_Render(Player *player, SDL_Renderer *renderer, const Camera *camera)
                 (player->flipHorizontal) ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
     }
 
-    SDL_FRect healthBarBg = { dst.x, dst.y - 5, PLAYER_WIDTH, 3 };
+    // Health bar sits over the body's width, just above the character's head
+    // (near the top of the sprite frame, which is where the character starts).
+    float barX = bodyDst.x;
+    float barY = dst.y + 6.0f;
+    SDL_FRect healthBarBg = { barX, barY, PLAYER_WIDTH, 3 };
     SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
     SDL_RenderFillRect(renderer, &healthBarBg);
 
     float healthPercent = (float)player->health / (float)player->maxHealth;
-    SDL_FRect healthBar = { dst.x, dst.y - 5, PLAYER_WIDTH * healthPercent, 3 };
+    SDL_FRect healthBar = { barX, barY, PLAYER_WIDTH * healthPercent, 3 };
     SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
     SDL_RenderFillRect(renderer, &healthBar);
 }

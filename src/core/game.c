@@ -108,10 +108,25 @@ static void SpawnEntitiesForLevel(Game *game, const LevelConfig *cfg) {
     SDL_Texture *bossTex = TextureManager_Load(manager, "assets/boss/boss.png"); // ok if missing; falls back to a colored rect
 
     // ---- Player ----
+    // Spawn like the SDL2 build: one tile in from the left edge, resting on top
+    // of the first solid tile in that column (scanning the "first-ground" layer
+    // top-to-bottom). A "player" spawn object placed in Tiled still overrides it;
+    // cfg->player.y is only the fallback if that column somehow has no floor.
     const MapSpawn *playerSpawn = Map_FindSpawn(&game->map, SPAWN_PLAYER, 0);
-    float px = playerSpawn ? playerSpawn->x : cfg->player.x;
+    float px = playerSpawn ? playerSpawn->x : (float)game->map.tileWidth;
     float py = playerSpawn ? playerSpawn->y : cfg->player.y;
     Player_Init(&game->player, px, py, playerTex);
+    if (!playerSpawn) {
+        float playerH = Player_GetBounds(&game->player).height;
+        float colCenterX = 1.5f * (float)game->map.tileWidth; // center of tile column 1
+        for (int ty = 0; ty < game->map.height; ty++) {
+            float rowCenterY = ((float)ty + 0.5f) * (float)game->map.tileHeight;
+            if (Map_IsSolidTile(&game->map, colCenterX, rowCenterY)) {
+                game->player.y = (float)ty * (float)game->map.tileHeight - playerH;
+                break;
+            }
+        }
+    }
 
     // ---- Enemies ----
     game->enemyCount = 0;
