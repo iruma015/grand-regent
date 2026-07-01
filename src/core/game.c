@@ -159,9 +159,17 @@ static void SpawnEntitiesForLevel(Game *game, const LevelConfig *cfg) {
 
 // Loads a level by index: swaps in its map, rebuilds the camera bounds, and
 // spawns its entities. Safe to call mid-game to transition between levels.
-static bool Game_LoadLevel(Game *game, int levelIndex) {
+// `preserveHealth` carries the player's current HP into the new level (used when
+// walking to the next map); a fresh start/restart passes false so HP resets.
+static bool Game_LoadLevel(Game *game, int levelIndex, bool preserveHealth) {
     if (levelIndex < 0 || levelIndex >= LEVEL_COUNT) return false;
     const LevelConfig *cfg = &LEVELS[levelIndex];
+
+    // Snapshot HP (and the earned max) before SpawnEntitiesForLevel re-inits the
+    // player -- which resets both to the 100 base -- so a level transition can
+    // carry over both the current health and any max-HP boost already unlocked.
+    int carriedHealth = game->player.health;
+    int carriedMaxHealth = game->player.maxHealth;
 
     Map_Free(&game->map); // no-op on a zeroed map, so this is fine on first load
     if (!Map_LoadFromTMJ(&game->map, cfg->mapPath, &game->textures)) {
@@ -170,10 +178,15 @@ static bool Game_LoadLevel(Game *game, int levelIndex) {
     }
 
     game->currentLevel = levelIndex;
+    game->enemiesCleared = false; // re-arm the clear-all-enemies heal for this level
 
     Camera_SetWorldBounds(&game->camera, Map_PixelWidth(&game->map), Map_PixelHeight(&game->map));
 
     SpawnEntitiesForLevel(game, cfg);
+    if (preserveHealth) {
+        game->player.maxHealth = carriedMaxHealth; // keep an unlocked max-HP boost
+        game->player.health = carriedHealth;       // keep HP earned on the previous map
+    }
     Camera_SnapTo(&game->camera, game->player.x, game->player.y);
 
     HitboxList_Clear(&game->hitboxes);
@@ -192,7 +205,7 @@ bool Game_Init(Game *game) {
         initSuccess = false;
     }
 
-    game->window = SDL_CreateWindow("Grand Regent", game->win.width, game->win.height, SDL_WINDOW_RESIZABLE);
+    game->window = SDL_CreateWindow("Grand Regent", game->win.width, game->win.height, SDL_EVENT_WINDOW_ENTER_FULLSCREEN);
     if (!game->window) {
         SDL_Log("Unable to create window: %s", SDL_GetError());
         SDL_Quit();
@@ -237,7 +250,7 @@ bool Game_Init(Game *game) {
 
     // Boot into the first level (this loads the map, sets camera bounds,
     // spawns entities, and snaps the camera).
-    if (!Game_LoadLevel(game, 0)) {
+    if (!Game_LoadLevel(game, 0, false)) {
         SDL_Log("Failed to load the first level");
         initSuccess = false;
     }
@@ -297,7 +310,7 @@ static void Game_StepZoom(Game *game, int dir) {
 // Reload level 0 with a fresh player and drop straight into play. Used by
 // "Start Game", "Restart", and "Play Again".
 static void Game_Restart(Game *game) {
-    Game_LoadLevel(game, 0);
+    Game_LoadLevel(game, 0, false);
     game->hitStopTimer = 0.0f;
     game->state = GAME_PLAYING;
     game->prevTime = SDL_GetTicks(); // avoid a large dt after time spent in a menu
@@ -623,6 +636,21 @@ void Game_Update(Game *game) {
 
         Game_ResolveHitboxes(game);
 
+        // Clearing every enemy on a level raises the player's max HP to 150 and
+        // tops them off -- so the HUD bar, which reads out of 100 up to now,
+        // switches to reading out of 150. Fires once per level, and only on
+        // levels that actually had enemies (so enemy-less levels don't reward it).
+        if (!game->enemiesCleared && game->enemyCount > 0) {
+            bool allDead = true;
+            for (int i = 0; i < game->enemyCount; i++) {
+                if (Enemy_IsAlive(&game->enemies[i])) { allDead = false; break; }
+            }
+            if (allDead) {
+                game->enemiesCleared = true;
+                Player_GrantHealthBoost(&game->player);
+            }
+        }
+
         Rect pb = Player_GetBounds(&game->player);
         // Bias the camera ahead of the player in the direction they face so the
         // player can see more of what's coming. The camera's own smoothing eases
@@ -658,7 +686,7 @@ void Game_Update(Game *game) {
         // level there's nowhere to advance to -- you win by beating the boss
         // (handled above), so the edge just acts as a wall there.
         if (!isFinalLevel && Player_AtLevelExit(game)) {
-            Game_LoadLevel(game, game->currentLevel + 1);
+            Game_LoadLevel(game, game->currentLevel + 1, true); // carry HP to the next map
         }
     }
 }

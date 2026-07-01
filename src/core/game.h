@@ -56,6 +56,7 @@ typedef struct Game {
     Player player;
     Enemy enemies[MAX_ENEMIES];
     int enemyCount;
+    bool enemiesCleared; // latched once this level's enemies are all dead (heal reward fires once)
     Boss boss;
     bool bossPresent;
 

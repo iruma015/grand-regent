@@ -66,6 +66,7 @@ void Player_Render(Player *player, SDL_Renderer *renderer, const Camera *camera)
 
 void Player_TakeDamage(Player *player, int damage, float knockbackX, float knockbackY);
 void Player_Heal(Player *player, int amount);
+void Player_GrantHealthBoost(Player *player); // clear-all-enemies reward: max HP -> 150, fully healed
 int Player_IsAlive(Player *player);
 
 Rect Player_GetAttackRange(const Player *player);

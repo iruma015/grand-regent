@@ -42,7 +42,8 @@
 #define PLAYER_ATTACK_DAMAGE 15
 #define PLAYER_ATTACK_COOLDOWN 0.6f
 #define PLAYER_ATTACK_ACTIVE_FRAME 2 // frame index where the swing's hitbox becomes live
-#define PLAYER_MAX_HEALTH 100
+#define PLAYER_MAX_HEALTH 150   // boosted cap, unlocked by clearing a level's enemies
+#define PLAYER_BASE_HEALTH 100  // starting health AND starting max, so the HUD bar reads out of 100 until the boost is earned
 #define PLAYER_HURT_FLASH_TIME 0.3f
 
 // --- Circular hurtbox (adjust freely) -------------------------------------
@@ -73,8 +74,8 @@ void Player_Init(Player *player, float x, float y, SDL_Texture *texture) {
     player->y = y;
     player->velocityX = 0.0f;
     player->velocityY = 0.0f;
-    player->health = PLAYER_MAX_HEALTH;
-    player->maxHealth = PLAYER_MAX_HEALTH;
+    player->health = PLAYER_BASE_HEALTH;
+    player->maxHealth = PLAYER_BASE_HEALTH;
     player->state = PLAYER_IDLE;
     player->texture = texture;
     player->isGrounded = false;
@@ -355,6 +356,14 @@ void Player_Heal(Player *player, int amount) {
     if (player->health > player->maxHealth) {
         player->health = player->maxHealth;
     }
+}
+
+// Reward for clearing a level's enemies: raise the max HP to the boosted cap
+// (150) and top the player off. This is what makes the HUD bar switch from
+// reading out of 100 to out of 150.
+void Player_GrantHealthBoost(Player *player) {
+    player->maxHealth = PLAYER_MAX_HEALTH;
+    player->health = player->maxHealth;
 }
 
 int Player_IsAlive(Player *player) {

@@ -7,7 +7,7 @@
 #define BOSS_HEIGHT 144.0f
 #define BOSS_SPEED 160.0f
 #define BOSS_DETECTION_RANGE 460.0f
-#define BOSS_MAX_HEALTH 800
+#define BOSS_MAX_HEALTH 700
 #define BOSS_HURT_TIME 0.25f
 
 // --- Jumping ---------------------------------------------------------------
