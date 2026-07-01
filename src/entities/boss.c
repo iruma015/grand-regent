@@ -285,7 +285,7 @@ void Boss_Render(Boss *boss, SDL_Renderer *renderer, const Camera *camera) {
         else                               SDL_SetTextureColorMod(boss->texture, 255, 255, 255);
 
         SDL_RenderTextureRotated(renderer, boss->texture, &src, &dst, 0, NULL,
-                boss->facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL);
+                boss->facingRight ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
 
         barY = dst.y + BOSS_HEAD_Y * s - 12.0f; // sit the bar just above the head
     } else {
