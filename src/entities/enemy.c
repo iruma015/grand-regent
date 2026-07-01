@@ -76,7 +76,10 @@ void Enemy_Update(Enemy *enemy, Player *player, int enemyIndex, float dt, const 
         float distance = sqrtf(dx * dx + dy * dy);
 
         if (distance < ENEMY_DETECTION_RANGE) {
-            enemy->flipHorizontal = (dx < 0.0f); // turn to face the player
+            // The enemy sprite's neutral facing is LEFT (opposite the player's,
+            // whose unflipped sprite faces right), so flip it only when the
+            // player is to the RIGHT. Turn to face the player.
+            enemy->flipHorizontal = (dx > 0.0f);
             if (distance > ENEMY_ATTACK_RANGE) {
                 enemy->velocityX = (dx > 0) ? ENEMY_SPEED : -ENEMY_SPEED;
                 if (enemy->state != ENEMY_ATTACK) enemy->state = ENEMY_RUN;

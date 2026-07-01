@@ -11,11 +11,13 @@ pkg_check_modules(SDL3_MIXER REQUIRED sdl3-mixer)
 add_executable(grand-regent
     src/main.c
 
-    # core: window/render loop, camera, texture cache, audio
+    # core: window/render loop, camera, texture cache, audio, input, HUD/menus
     src/core/game.c
     src/core/camera.c
     src/core/texture.c
     src/core/audio.c
+    src/core/input.c
+    src/core/ui.c
 
     # world: tile map data, TMJ (Tiled JSON) loading + rendering
     src/world/map.c

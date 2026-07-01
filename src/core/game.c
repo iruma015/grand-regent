@@ -1,5 +1,7 @@
 #include "game.h"
 #include "audio.h"
+#include "input.h"
+#include "ui.h"
 #include "../world/tmj_loader.h"
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_render.h>
@@ -206,6 +208,15 @@ bool Game_Init(Game *game) {
 
     SDL_SetRenderLogicalPresentation(game->renderer, game->win.logW, game->win.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
+    // Remember the authored logical size as the 1.0x zoom baseline, then enable
+    // alpha blending so translucent HUD/menu overlays composite correctly.
+    game->win.baseLogW = game->win.logW;
+    game->win.baseLogH = game->win.logH;
+    game->zoom = 1.0f;
+    game->menuSelection = 0;
+    game->settingsReturn = GAME_MENU;
+    SDL_SetRenderDrawBlendMode(game->renderer, SDL_BLENDMODE_BLEND);
+
     // VSync gives evenly paced, tear-free frames -- the single biggest win for
     // perceived smoothness. If the driver refuses it, main.c falls back to a
     // fixed delay to cap the frame rate.
@@ -218,6 +229,10 @@ bool Game_Init(Game *game) {
     // (silently), so a failure here doesn't fail Game_Init.
     Audio_Init();
 
+    // Gamepad + mouse input. Also optional: with no controller attached the
+    // keyboard/mouse still work and gamepad queries just report "not pressed".
+    Input_Init();
+
     Camera_Init(&game->camera, (float)game->win.logW, (float)game->win.logH);
 
     // Boot into the first level (this loads the map, sets camera bounds,
@@ -227,7 +242,8 @@ bool Game_Init(Game *game) {
         initSuccess = false;
     }
 
-    game->state = GAME_PLAYING;
+    // Boot to the main menu (the freshly-loaded level 0 shows behind it).
+    game->state = GAME_MENU;
     game->prevTime = SDL_GetTicks();
     lastFpsTime = SDL_GetTicks();
 
@@ -237,6 +253,247 @@ bool Game_Init(Game *game) {
             game->win.width, game->win.height, game->win.logW, game->win.logH);
 
     return initSuccess;
+}
+
+// ===========================================================================
+//  MENU / SETTINGS
+//
+//  The game is a small state machine (see GameState). GAME_PLAYING runs the
+//  simulation; every other state is a menu overlay drawn on top of the frozen
+//  world. All menu navigation flows through Game_MenuKey below.
+// ===========================================================================
+
+// Camera zoom is expressed as a factor over the authored logical resolution:
+// a smaller effective logical size means fewer world pixels fill the screen,
+// i.e. everything looks bigger (more zoomed in).
+static const float ZOOM_LEVELS[] = { 1.0f, 1.25f, 1.5f, 2.0f };
+#define ZOOM_COUNT ((int)(sizeof(ZOOM_LEVELS) / sizeof(ZOOM_LEVELS[0])))
+
+// Recompute the logical render size from the current zoom and push it to both
+// the renderer and the camera viewport (the two must agree for follow/clamp to
+// work). The whole engine keys off the logical size, so this is the only place
+// zoom needs to touch.
+static void Game_ApplyZoom(Game *game) {
+    int logW = (int)((float)game->win.baseLogW / game->zoom + 0.5f);
+    int logH = (int)((float)game->win.baseLogH / game->zoom + 0.5f);
+    game->win.logW = logW;
+    game->win.logH = logH;
+    SDL_SetRenderLogicalPresentation(game->renderer, logW, logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    game->camera.viewW = (float)logW;
+    game->camera.viewH = (float)logH;
+    Camera_Update(&game->camera);
+}
+
+static void Game_StepZoom(Game *game, int dir) {
+    int idx = 0;
+    for (int i = 0; i < ZOOM_COUNT; i++) {
+        if (ZOOM_LEVELS[i] == game->zoom) { idx = i; break; }
+    }
+    idx = (idx + dir % ZOOM_COUNT + ZOOM_COUNT) % ZOOM_COUNT;
+    game->zoom = ZOOM_LEVELS[idx];
+    Game_ApplyZoom(game);
+}
+
+// Reload level 0 with a fresh player and drop straight into play. Used by
+// "Start Game", "Restart", and "Play Again".
+static void Game_Restart(Game *game) {
+    Game_LoadLevel(game, 0);
+    game->hitStopTimer = 0.0f;
+    game->state = GAME_PLAYING;
+    game->prevTime = SDL_GetTicks(); // avoid a large dt after time spent in a menu
+    Audio_PlayMusic();
+}
+
+static void Game_Pause(Game *game) {
+    game->state = GAME_PAUSED;
+    game->menuSelection = 0;
+}
+
+static void Game_Resume(Game *game) {
+    game->state = GAME_PLAYING;
+    game->prevTime = SDL_GetTicks();
+}
+
+static void Game_ToMenu(Game *game) {
+    game->state = GAME_MENU;
+    game->menuSelection = 0;
+}
+
+static void Game_OpenSettings(Game *game, GameState returnTo) {
+    game->settingsReturn = returnTo;
+    game->state = GAME_SETTINGS;
+    game->menuSelection = 0;
+}
+
+static void Game_CloseSettings(Game *game) {
+    game->state = game->settingsReturn;
+    game->menuSelection = 0;
+}
+
+// Number of selectable rows in the menu for `state` -- kept in lockstep with
+// the item lists in Game_RenderCurrentMenu and the actions in Game_MenuActivate.
+static int Game_MenuItemCount(GameState state) {
+    switch (state) {
+        case GAME_MENU:        return 3; // Start / Settings / Quit
+        case GAME_PAUSED:      return 4; // Resume / Restart / Settings / Quit to Menu
+        case GAME_SETTINGS:    return 3; // Sound / Camera Zoom / Back
+        case GAME_PLAYER_DEAD: return 2; // Restart / Quit to Menu
+        case GAME_WIN:         return 2; // Play Again / Quit to Menu
+        default:               return 0;
+    }
+}
+
+// Change the value of the currently-highlighted settings row (Left/Right, or
+// Enter which nudges it forward).
+static void Game_SettingsAdjust(Game *game, int dir) {
+    switch (game->menuSelection) {
+        case 0: Audio_ToggleMute();      break; // Sound: either direction toggles
+        case 1: Game_StepZoom(game, dir); break; // Camera Zoom: cycle
+        default: break;
+    }
+}
+
+// Activate (Enter/Space) the highlighted row for the current menu.
+static void Game_MenuActivate(Game *game) {
+    switch (game->state) {
+        case GAME_MENU:
+            if (game->menuSelection == 0)      Game_Restart(game);
+            else if (game->menuSelection == 1) Game_OpenSettings(game, GAME_MENU);
+            else                               game->running = false;
+            break;
+        case GAME_PAUSED:
+            if (game->menuSelection == 0)      Game_Resume(game);
+            else if (game->menuSelection == 1) Game_Restart(game);
+            else if (game->menuSelection == 2) Game_OpenSettings(game, GAME_PAUSED);
+            else                               Game_ToMenu(game);
+            break;
+        case GAME_SETTINGS:
+            if (game->menuSelection == 2)      Game_CloseSettings(game); // Back
+            else                               Game_SettingsAdjust(game, +1);
+            break;
+        case GAME_PLAYER_DEAD:
+        case GAME_WIN:
+            if (game->menuSelection == 0)      Game_Restart(game);
+            else                               Game_ToMenu(game);
+            break;
+        default: break;
+    }
+}
+
+// Esc / "back" from within a menu.
+static void Game_MenuBack(Game *game) {
+    if (game->state == GAME_PAUSED)        Game_Resume(game);
+    else if (game->state == GAME_SETTINGS) Game_CloseSettings(game);
+}
+
+// Move the menu highlight by `dir` (-1 up, +1 down), wrapping. Shared by the
+// keyboard, gamepad D-pad, and left stick.
+static void Game_MenuMove(Game *game, int dir) {
+    int count = Game_MenuItemCount(game->state);
+    if (count > 0) game->menuSelection = (game->menuSelection + dir % count + count) % count;
+}
+
+static void Game_MenuKey(Game *game, SDL_Keycode key) {
+    switch (key) {
+        case SDLK_UP: case SDLK_W:
+            Game_MenuMove(game, -1);
+            break;
+        case SDLK_DOWN: case SDLK_S:
+            Game_MenuMove(game, +1);
+            break;
+        case SDLK_LEFT: case SDLK_A:
+            if (game->state == GAME_SETTINGS) Game_SettingsAdjust(game, -1);
+            break;
+        case SDLK_RIGHT: case SDLK_D:
+            if (game->state == GAME_SETTINGS) Game_SettingsAdjust(game, +1);
+            break;
+        case SDLK_RETURN: case SDLK_KP_ENTER: case SDLK_SPACE:
+            Game_MenuActivate(game);
+            break;
+        case SDLK_ESCAPE:
+            Game_MenuBack(game);
+            break;
+        default: break;
+    }
+}
+
+static void Game_OnKeyDown(Game *game, SDL_Keycode key) {
+    if (game->state == GAME_PLAYING) {
+        if (key == SDLK_ESCAPE || key == SDLK_P) {
+            Game_Pause(game);
+        } else if (key == SDLK_M) {
+            Audio_ToggleMute();
+            SDL_Log("Audio %s", Audio_IsMuted() ? "muted" : "unmuted");
+        }
+    } else {
+        Game_MenuKey(game, key);
+    }
+}
+
+// Gamepad buttons drive menus the same way the keyboard does. During play only
+// Start matters here (pause) -- movement/attack/skills are polled in player.c.
+static void Game_OnGamepadButton(Game *game, Uint8 button) {
+    if (button == SDL_GAMEPAD_BUTTON_START) {
+        if (game->state == GAME_PLAYING)      Game_Pause(game);
+        else if (game->state == GAME_PAUSED)  Game_Resume(game);
+        else                                  Game_MenuActivate(game);
+        return;
+    }
+    if (game->state == GAME_PLAYING) return;
+
+    switch (button) {
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:    Game_MenuMove(game, -1); break;
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:  Game_MenuMove(game, +1); break;
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+            if (game->state == GAME_SETTINGS) Game_SettingsAdjust(game, -1);
+            break;
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+            if (game->state == GAME_SETTINGS) Game_SettingsAdjust(game, +1);
+            break;
+        case SDL_GAMEPAD_BUTTON_SOUTH:      Game_MenuActivate(game); break;
+        case SDL_GAMEPAD_BUTTON_EAST:       Game_MenuBack(game);     break;
+        default: break;
+    }
+}
+
+// Left stick as a menu D-pad. The latch re-arms only after the stick returns
+// near center, so one push moves the highlight one row (no runaway scrolling).
+static void Game_OnGamepadAxis(Game *game, Uint8 axis, Sint16 value) {
+    static int stickLatch = 0;
+    if (game->state == GAME_PLAYING || axis != SDL_GAMEPAD_AXIS_LEFTY) {
+        stickLatch = 0;
+        return;
+    }
+    const Sint16 threshold = 16000;
+    int dir = (value < -threshold) ? -1 : (value > threshold) ? 1 : 0;
+    if (dir != 0 && dir != stickLatch) Game_MenuMove(game, dir);
+    stickLatch = dir;
+}
+
+// Convert a window-space mouse position to the logical (zoom-adjusted) coords
+// menus are laid out in, then return the row under it (or -1).
+static int Game_MenuRowAtWindow(Game *game, float winX, float winY) {
+    int count = Game_MenuItemCount(game->state);
+    if (count <= 0) return -1;
+    float lx = winX, ly = winY;
+    SDL_RenderCoordinatesFromWindow(game->renderer, winX, winY, &lx, &ly);
+    return UI_MenuItemAt(game, lx, ly, count);
+}
+
+static void Game_OnMouseMotion(Game *game, float winX, float winY) {
+    if (game->state == GAME_PLAYING) return; // in-game aiming isn't used
+    int row = Game_MenuRowAtWindow(game, winX, winY);
+    if (row >= 0) game->menuSelection = row; // hover to highlight
+}
+
+static void Game_OnMouseButton(Game *game, Uint8 button, float winX, float winY) {
+    if (button != SDL_BUTTON_LEFT) return;
+    if (game->state == GAME_PLAYING) return; // clicks attack via polling in player.c
+    int row = Game_MenuRowAtWindow(game, winX, winY);
+    if (row >= 0) {
+        game->menuSelection = row;
+        Game_MenuActivate(game); // click selects + activates the row
+    }
 }
 
 void Game_HandleEvents(Game *game) {
@@ -250,10 +507,23 @@ void Game_HandleEvents(Game *game) {
                 SDL_GetWindowSize(game->window, &game->win.width, &game->win.height);
                 break;
             case SDL_EVENT_KEY_DOWN:
-                if (event.key.key == SDLK_M) {
-                    Audio_ToggleMute();
-                    SDL_Log("Audio %s", Audio_IsMuted() ? "muted" : "unmuted");
-                }
+                Game_OnKeyDown(game, event.key.key);
+                break;
+            case SDL_EVENT_GAMEPAD_ADDED:
+            case SDL_EVENT_GAMEPAD_REMOVED:
+                Input_HandleEvent(&event); // keep the active pad handle in sync
+                break;
+            case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+                Game_OnGamepadButton(game, event.gbutton.button);
+                break;
+            case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+                Game_OnGamepadAxis(game, event.gaxis.axis, event.gaxis.value);
+                break;
+            case SDL_EVENT_MOUSE_MOTION:
+                Game_OnMouseMotion(game, event.motion.x, event.motion.y);
+                break;
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                Game_OnMouseButton(game, event.button.button, event.button.x, event.button.y);
                 break;
         }
     }
@@ -359,6 +629,7 @@ void Game_Update(Game *game) {
 
         if (!Player_IsAlive(&game->player)) {
             game->state = GAME_PLAYER_DEAD;
+            game->menuSelection = 0;
             Audio_StopMusic();
             Audio_PlaySfx(SFX_PLAYER_DEATH);
             SDL_Log("YOU DIED! Game Over.");
@@ -370,6 +641,7 @@ void Game_Update(Game *game) {
         // Beating the final boss wins the game outright.
         if (isFinalLevel && game->bossPresent && !Boss_IsAlive(&game->boss)) {
             game->state = GAME_WIN;
+            game->menuSelection = 0;
             Audio_StopMusic();
             Audio_PlaySfx(SFX_VICTORY);
             SDL_Log("BOSS DEFEATED! You win!");
@@ -420,6 +692,50 @@ static void RenderHitboxDebug(Game *game) {
                       pc.radius);
 }
 
+// Draws the menu overlay for whatever non-playing state we're in. The item
+// lists here mirror Game_MenuItemCount / Game_MenuActivate.
+static void Game_RenderCurrentMenu(Game *game) {
+    char zoomVal[16];
+    SDL_snprintf(zoomVal, sizeof(zoomVal), "%.2fx", (double)game->zoom);
+    const char *soundVal = Audio_IsMuted() ? "OFF" : "ON";
+
+    switch (game->state) {
+        case GAME_MENU: {
+            UIMenuItem items[] = {
+                { "Start Game", NULL }, { "Settings", NULL }, { "Quit", NULL },
+            };
+            UI_RenderMenu(game, "GRAND REGENT", items, 3, game->menuSelection);
+            break;
+        }
+        case GAME_PAUSED: {
+            UIMenuItem items[] = {
+                { "Resume", NULL }, { "Restart", NULL },
+                { "Settings", NULL }, { "Quit to Menu", NULL },
+            };
+            UI_RenderMenu(game, "PAUSED", items, 4, game->menuSelection);
+            break;
+        }
+        case GAME_SETTINGS: {
+            UIMenuItem items[] = {
+                { "Sound", soundVal }, { "Camera Zoom", zoomVal }, { "Back", NULL },
+            };
+            UI_RenderMenu(game, "SETTINGS", items, 3, game->menuSelection);
+            break;
+        }
+        case GAME_PLAYER_DEAD: {
+            UIMenuItem items[] = { { "Restart", NULL }, { "Quit to Menu", NULL } };
+            UI_RenderMenu(game, "YOU DIED", items, 2, game->menuSelection);
+            break;
+        }
+        case GAME_WIN: {
+            UIMenuItem items[] = { { "Play Again", NULL }, { "Quit to Menu", NULL } };
+            UI_RenderMenu(game, "VICTORY", items, 2, game->menuSelection);
+            break;
+        }
+        default: break;
+    }
+}
+
 void Game_Render(Game *game) {
     SDL_SetRenderDrawColor(game->renderer, 20, 10, 30, 255);
     SDL_RenderClear(game->renderer);
@@ -434,16 +750,14 @@ void Game_Render(Game *game) {
         Boss_Render(&game->boss, game->renderer, &game->camera);
     }
 
-    RenderHitboxDebug(game);
-
-    if (game->state == GAME_PLAYER_DEAD) {
-        SDL_SetRenderDrawColor(game->renderer, 255, 0, 0, 200);
-        SDL_FRect overlay = { (float)game->win.logW / 2 - 80, (float)game->win.logH / 2 - 20, 160, 40 };
-        SDL_RenderFillRect(game->renderer, &overlay);
-    } else if (game->state == GAME_BOSS_DEAD || game->state == GAME_WIN) {
-        SDL_SetRenderDrawColor(game->renderer, 0, 200, 0, 200);
-        SDL_FRect overlay = { (float)game->win.logW / 2 - 80, (float)game->win.logH / 2 - 20, 160, 40 };
-        SDL_RenderFillRect(game->renderer, &overlay);
+    // Debug outlines and the HUD belong to live play; menus draw over a frozen,
+    // clean world instead.
+    if (game->state == GAME_PLAYING || game->state == GAME_PAUSED) {
+        RenderHitboxDebug(game);
+        UI_RenderHUD(game);
+    }
+    if (game->state != GAME_PLAYING) {
+        Game_RenderCurrentMenu(game);
     }
 
     SDL_RenderPresent(game->renderer);
@@ -465,6 +779,7 @@ void Game_Render(Game *game) {
 
 void Game_Destroy(Game *game) {
     Audio_Shutdown();
+    Input_Shutdown();
     Map_Free(&game->map);
     TextureManager_Destroy(&game->textures);
     if (game->renderer) SDL_DestroyRenderer(game->renderer);

@@ -14,7 +14,10 @@
 #define MAX_ENEMIES 10
 
 typedef enum {
+    GAME_MENU,        // main menu (startup / quit-to-menu)
     GAME_PLAYING,
+    GAME_PAUSED,      // pause overlay
+    GAME_SETTINGS,    // settings submenu (mute sound / camera zoom)
     GAME_PLAYER_DEAD,
     GAME_BOSS_DEAD,
     GAME_WIN          // cleared the final level
@@ -22,9 +25,12 @@ typedef enum {
 
 typedef struct {
     int width, height, logW, logH;
+    // The authored (un-zoomed) logical resolution. Camera zoom shrinks the
+    // effective logW/logH below; these remember the 1.0x baseline to divide by.
+    int baseLogW, baseLogH;
 } Win;
 
-typedef struct {
+typedef struct Game {
     SDL_Window *window;
     SDL_Renderer *renderer;
     Win win;
@@ -32,6 +38,11 @@ typedef struct {
     bool running;
     GameState state;
     bool vsyncEnabled;  // true if the renderer paces frames itself (no manual delay)
+
+    // --- Menu / settings ---
+    int menuSelection;      // highlighted item in the current menu
+    GameState settingsReturn; // state to return to when leaving the settings screen
+    float zoom;             // camera zoom factor (1.0 = authored view; higher = closer)
 
     float deltaTime;
     Uint64 prevTime;

@@ -1,6 +1,7 @@
 #include "player.h"
 #include "physics.h"
 #include "../core/audio.h"
+#include "../core/input.h"
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_keycode.h>
 #include <SDL3/SDL_scancode.h>
@@ -84,6 +85,10 @@ void Player_Init(Player *player, float x, float y, SDL_Texture *texture) {
     player->hitboxRadius = PLAYER_HITBOX_RADIUS;
     player->coyoteTimer = 0.0f;
     player->jumpBufferTimer = 0.0f;
+    // Start "held": the button that confirmed the menu (Space / gamepad A doubles
+    // as jump) must be released before it counts as a jump, so the level doesn't
+    // start with an accidental hop.
+    player->prevJumpHeld = true;
 
     Animation_Init(&player->idleAnim, 9, 0.1f);
     Animation_Init(&player->runAnim, 9, 0.1f);
@@ -151,10 +156,20 @@ void Player_Update(Player *player, float dt, const Map *gameMap, HitboxList *hit
     //     a stop via friction otherwise. This applies even while attacking so
     //     momentum bleeds off smoothly instead of the player sliding at full
     //     speed through a swing.
+    //     Keyboard (A/D) and the gamepad (left stick + D-pad) are summed into a
+    //     single [-1, 1] intent, so an analog stick gives a proportional walk.
     float targetVX = 0.0f;
     if (canAct) {
-        if (keys[SDL_SCANCODE_A]) { player->flipHorizontal = true;  targetVX -= PLAYER_SPEED; }
-        if (keys[SDL_SCANCODE_D]) { player->flipHorizontal = false; targetVX += PLAYER_SPEED; }
+        float move = 0.0f;
+        if (keys[SDL_SCANCODE_A]) move -= 1.0f;
+        if (keys[SDL_SCANCODE_D]) move += 1.0f;
+        move += Input_MoveX();
+        if (move > 1.0f) move = 1.0f;
+        if (move < -1.0f) move = -1.0f;
+        if (move != 0.0f) {
+            player->flipHorizontal = (move < 0.0f);
+            targetVX = move * PLAYER_SPEED;
+        }
     }
     bool accelerating = (targetVX != 0.0f);
     float rate = player->isGrounded
@@ -168,7 +183,13 @@ void Player_Update(Player *player, float dt, const Map *gameMap, HitboxList *hit
     if (player->isGrounded) player->coyoteTimer = PLAYER_COYOTE_TIME;
     else if (player->coyoteTimer > 0.0f) player->coyoteTimer -= dt;
 
-    bool jumpPressed = keys[SDL_SCANCODE_SPACE] && !prevKeyState[SDL_SCANCODE_SPACE];
+    // Jump is Space on the keyboard or the gamepad's south ("A") button; both
+    // feed one held state so press/release edges work no matter the device.
+    bool jumpHeld = keys[SDL_SCANCODE_SPACE] || Input_JumpHeld();
+    bool jumpPressed = jumpHeld && !player->prevJumpHeld;
+    bool jumpReleased = !jumpHeld && player->prevJumpHeld;
+    player->prevJumpHeld = jumpHeld;
+
     if (jumpPressed) player->jumpBufferTimer = PLAYER_JUMP_BUFFER;
     else if (player->jumpBufferTimer > 0.0f) player->jumpBufferTimer -= dt;
 
@@ -181,7 +202,6 @@ void Player_Update(Player *player, float dt, const Map *gameMap, HitboxList *hit
     }
 
     // Let go of jump while still rising -> cut the ascent short for a hop.
-    bool jumpReleased = !keys[SDL_SCANCODE_SPACE] && prevKeyState[SDL_SCANCODE_SPACE];
     if (jumpReleased && player->velocityY < 0.0f) {
         player->velocityY *= PLAYER_JUMP_CUT;
     }
@@ -224,7 +244,8 @@ void Player_Update(Player *player, float dt, const Map *gameMap, HitboxList *hit
     // ---- Combat input: normal attack + skills ----
     int activeSkillIndex = -1; // -1 == normal attack, otherwise index into skills[]
 
-    bool attackPressed = keys[SDL_SCANCODE_J] && !prevKeyState[SDL_SCANCODE_J];
+    bool attackPressed = (keys[SDL_SCANCODE_J] && !prevKeyState[SDL_SCANCODE_J]) ||
+                         Input_AttackPressed();
     if (attackPressed && player->attackCooldownTimer <= 0.0f && player->state != PLAYER_ATTACK) {
         StartAttack(player, PLAYER_ATTACK_COOLDOWN);
         Audio_PlaySfx(SFX_ATTACK);
@@ -232,7 +253,8 @@ void Player_Update(Player *player, float dt, const Map *gameMap, HitboxList *hit
 
     for (int i = 0; i < player->skillCount; i++) {
         Skill *skill = &player->skills[i];
-        bool pressed = keys[skill->key] && !prevKeyState[skill->key];
+        bool pressed = (keys[skill->key] && !prevKeyState[skill->key]) ||
+                       Input_SkillPressed(i);
         if (pressed && player->state != PLAYER_ATTACK && Skill_TryActivate(skill, true)) {
             // Skill_TryActivate already started the skill's own cooldown;
             // the attack-cooldown here just stops the swing animation from
@@ -309,6 +331,7 @@ void Player_Update(Player *player, float dt, const Map *gameMap, HitboxList *hit
     }
 
     memcpy(prevKeyState, keys, sizeof(bool) * SDL_SCANCODE_COUNT);
+    Input_Snapshot(); // remember this frame's gamepad/mouse buttons for edge detection
 }
 
 void Player_TakeDamage(Player *player, int damage, float knockbackX, float knockbackY) {

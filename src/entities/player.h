@@ -49,6 +49,7 @@ typedef struct {
     // --- Platforming feel timers ---
     float coyoteTimer;     // grace period after leaving a ledge during which a jump still fires
     float jumpBufferTimer; // remembers a jump pressed slightly before landing, so it fires on touchdown
+    bool prevJumpHeld;     // jump held last frame (keyboard OR gamepad), for press/release edges
 
     // Circular hurtbox: this is what enemy/boss attacks are tested against.
     // Tune `hitboxRadius` (and the offsets in Player_GetCircle) to taste.
