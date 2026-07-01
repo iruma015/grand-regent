@@ -2,7 +2,10 @@
 
 void Physics_Step(Body *body, const Map *map, float dt) {
     // Gravity (accumulates downward velocity, capped at terminal speed).
-    body->vy += GRAVITY * dt;
+    // Falling uses a heavier gravity than rising so jumps feel snappy, not
+    // floaty, without lowering the peak jump height (see FALL_GRAVITY_MULT).
+    float gravity = (body->vy > 0.0f) ? GRAVITY * FALL_GRAVITY_MULT : GRAVITY;
+    body->vy += gravity * dt;
     if (body->vy > MAX_FALL_SPEED) {
         body->vy = MAX_FALL_SPEED;
     }

@@ -4,7 +4,7 @@ A 2D action game in pure C + SDL3.
 
 ## Build
 
-Needs SDL3 + SDL3_image dev packages and CMake/Ninja (or Make).
+Needs SDL3 + SDL3_image + SDL3_mixer dev packages and CMake/Ninja (or Make).
 
 ```
 mkdir build && cd build
@@ -27,6 +27,7 @@ before running `cmake`.
 | J         | Attack                |
 | K         | Skill: Heavy Strike   |
 | L         | Skill: Dash Strike    |
+| M         | Toggle mute           |
 
 ## Project layout
 
@@ -37,6 +38,7 @@ src/
     game.c/h       top-level state + the frame loop
     camera.c/h     world<->screen transform, smooth follow, bounds clamp
     texture.c/h    texture cache (unchanged from before)
+    audio.c/h      global SFX + looping music (SDL_mixer)
   world/       the level itself
     map.c/h         tile layers, tilesets, rendering, tile-collision queries
     tmj_loader.c/h  parses Tiled JSON (.tmj) maps via cJSON
@@ -56,8 +58,10 @@ src/
 assets/
   maps/            .tmj (and the original .tmx) + tilesets/
   player/, enemy/, boss/
+  audio/           .wav SFX + music.wav (generated placeholders; replaceable)
 tools/
   tmx_to_tmj.py    one-off converter used to produce the .tmj files
+  gen_audio.py     regenerates the placeholder audio in assets/audio/
 ```
 
 ## Maps: TMJ + spawn points
@@ -133,3 +137,23 @@ activeTime, recoverTime, animFrames, frameDuration }`. The boss state machine
 (`BOSS_IDLE -> BOSS_WINDUP -> BOSS_ACTIVE -> BOSS_RECOVER`) telegraphs an
 attack before it becomes a live hitbox, so a new boss attack is also just one
 new row in that table.
+
+## Audio
+
+Sound is handled by a small global module (`src/core/audio.c`, SDL_mixer 3.x):
+one mixer, a looping music track, and a fixed set of predecoded sound effects
+declared in the `Sfx` enum. Because audio fires from all over (player, combat,
+game state), it's a global — any file just calls `Audio_PlaySfx(SFX_JUMP)` with
+no plumbing. `Audio_Init` opens the default device; if that fails (e.g. no audio
+hardware) the game logs it and runs silently, so audio is never fatal. Add a new
+sound by dropping a file in `assets/audio/`, adding an enum entry, and one row in
+`SFX_PATHS[]`.
+
+The files in `assets/audio/` are **procedurally-generated placeholders**
+(`tools/gen_audio.py`, pure-stdlib synthesis). Drop in a real recording of the
+same filename to replace any of them — no code changes needed. Regenerate the
+placeholders with:
+
+```
+python3 tools/gen_audio.py
+```

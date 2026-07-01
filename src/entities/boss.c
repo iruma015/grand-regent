@@ -3,8 +3,8 @@
 #include <math.h>
 #include <string.h>
 
-#define BOSS_WIDTH 56.0f
-#define BOSS_HEIGHT 64.0f
+#define BOSS_WIDTH 76.0f
+#define BOSS_HEIGHT 88.0f
 #define BOSS_SPEED 80.0f
 #define BOSS_DETECTION_RANGE 260.0f
 #define BOSS_MAX_HEALTH 200

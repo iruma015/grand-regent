@@ -1,13 +1,34 @@
 #include "player.h"
 #include "physics.h"
+#include "../core/audio.h"
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_keycode.h>
 #include <SDL3/SDL_scancode.h>
 #include <string.h>
 
-#define PLAYER_WIDTH 48.0f
-#define PLAYER_HEIGHT 48.0f
+#define PLAYER_WIDTH 64.0f
+#define PLAYER_HEIGHT 64.0f
 #define PLAYER_SPEED 130.0f
+
+// --- Movement feel ---------------------------------------------------------
+// Rather than snapping horizontal velocity to ±SPEED (which feels robotic), the
+// player accelerates toward the target speed and decays via friction when no
+// key is held. Air control is weaker than ground control so mid-air steering
+// feels committed. Values are pixels/second^2.
+#define PLAYER_GROUND_ACCEL    1600.0f
+#define PLAYER_AIR_ACCEL        900.0f
+#define PLAYER_GROUND_FRICTION 1500.0f
+#define PLAYER_AIR_FRICTION     600.0f
+
+// Jump forgiveness windows (seconds). Coyote time lets a jump fire just after
+// walking off a ledge; the jump buffer lets a jump pressed just before landing
+// fire the instant the player touches down. Both make platforming feel fair.
+#define PLAYER_COYOTE_TIME  0.10f
+#define PLAYER_JUMP_BUFFER  0.10f
+// Releasing jump while still rising cuts the upward velocity -> tap for a short
+// hop, hold for a full jump (variable jump height).
+#define PLAYER_JUMP_CUT     0.45f
+
 #define PLAYER_ATTACK_RANGE 44.0f
 #define PLAYER_ATTACK_DAMAGE 15
 #define PLAYER_ATTACK_COOLDOWN 0.6f
@@ -17,13 +38,26 @@
 
 // --- Circular hurtbox (adjust freely) -------------------------------------
 // Radius of the player's body hitbox, and where its center sits relative to
-// the sprite's top-left. Defaults put it at the center of the 48x48 body.
-#define PLAYER_HITBOX_RADIUS    18.0f
+// the sprite's top-left. Defaults put it at the center of the 64x64 body.
+#define PLAYER_HITBOX_RADIUS    24.0f
 #define PLAYER_HITBOX_OFFSET_X  (PLAYER_WIDTH * 0.5f)
 #define PLAYER_HITBOX_OFFSET_Y  (PLAYER_HEIGHT * 0.5f)
 
 // Tracks "just pressed" state across frames for skill key edge-detection.
 static bool prevKeyState[SDL_SCANCODE_COUNT] = {0};
+
+// Moves `current` toward `target` by at most `maxDelta`, without overshooting.
+// Used to accelerate/decelerate horizontal movement smoothly.
+static float Approach(float current, float target, float maxDelta) {
+    if (current < target) {
+        current += maxDelta;
+        if (current > target) current = target;
+    } else if (current > target) {
+        current -= maxDelta;
+        if (current < target) current = target;
+    }
+    return current;
+}
 
 void Player_Init(Player *player, float x, float y, SDL_Texture *texture) {
     player->x = x;
@@ -40,6 +74,8 @@ void Player_Init(Player *player, float x, float y, SDL_Texture *texture) {
     player->hurtFlashTimer = 0.0f;
     player->activeSwingSkill = -1;
     player->hitboxRadius = PLAYER_HITBOX_RADIUS;
+    player->coyoteTimer = 0.0f;
+    player->jumpBufferTimer = 0.0f;
 
     Animation_Init(&player->idleAnim, 9, 0.1f);
     Animation_Init(&player->runAnim, 9, 0.1f);
@@ -102,20 +138,44 @@ void Player_Update(Player *player, float dt, const Map *gameMap, HitboxList *hit
     const bool *keys = SDL_GetKeyboardState(NULL);
 
     bool canAct = (player->state != PLAYER_ATTACK && player->state != PLAYER_HURT);
+
+    // --- Horizontal movement: accelerate toward the input direction, coast to
+    //     a stop via friction otherwise. This applies even while attacking so
+    //     momentum bleeds off smoothly instead of the player sliding at full
+    //     speed through a swing.
+    float targetVX = 0.0f;
     if (canAct) {
-        player->velocityX = 0.0f;
-        if (keys[SDL_SCANCODE_A]) {
-            player->flipHorizontal = true;
-            player->velocityX = -PLAYER_SPEED;
-        }
-        if (keys[SDL_SCANCODE_D]) {
-            player->flipHorizontal = false;
-            player->velocityX = PLAYER_SPEED;
-        }
-        if (keys[SDL_SCANCODE_SPACE] && player->isGrounded) {
-            player->velocityY = JUMP_FORCE;
-            player->isGrounded = false;
-        }
+        if (keys[SDL_SCANCODE_A]) { player->flipHorizontal = true;  targetVX -= PLAYER_SPEED; }
+        if (keys[SDL_SCANCODE_D]) { player->flipHorizontal = false; targetVX += PLAYER_SPEED; }
+    }
+    bool accelerating = (targetVX != 0.0f);
+    float rate = player->isGrounded
+                     ? (accelerating ? PLAYER_GROUND_ACCEL : PLAYER_GROUND_FRICTION)
+                     : (accelerating ? PLAYER_AIR_ACCEL : PLAYER_AIR_FRICTION);
+    player->velocityX = Approach(player->velocityX, targetVX, rate * dt);
+
+    // --- Jump: coyote time + input buffering + variable height ---
+    // Refresh the coyote window whenever we're on the ground; otherwise it ticks
+    // down, briefly still allowing a jump just after leaving a ledge.
+    if (player->isGrounded) player->coyoteTimer = PLAYER_COYOTE_TIME;
+    else if (player->coyoteTimer > 0.0f) player->coyoteTimer -= dt;
+
+    bool jumpPressed = keys[SDL_SCANCODE_SPACE] && !prevKeyState[SDL_SCANCODE_SPACE];
+    if (jumpPressed) player->jumpBufferTimer = PLAYER_JUMP_BUFFER;
+    else if (player->jumpBufferTimer > 0.0f) player->jumpBufferTimer -= dt;
+
+    if (canAct && player->jumpBufferTimer > 0.0f && player->coyoteTimer > 0.0f) {
+        player->velocityY = JUMP_FORCE;
+        player->isGrounded = false;
+        player->coyoteTimer = 0.0f;
+        player->jumpBufferTimer = 0.0f;
+        Audio_PlaySfx(SFX_JUMP);
+    }
+
+    // Let go of jump while still rising -> cut the ascent short for a hop.
+    bool jumpReleased = !keys[SDL_SCANCODE_SPACE] && prevKeyState[SDL_SCANCODE_SPACE];
+    if (jumpReleased && player->velocityY < 0.0f) {
+        player->velocityY *= PLAYER_JUMP_CUT;
     }
 
     Body body = { player->x, player->y, PLAYER_WIDTH, PLAYER_HEIGHT,
@@ -159,6 +219,7 @@ void Player_Update(Player *player, float dt, const Map *gameMap, HitboxList *hit
     bool attackPressed = keys[SDL_SCANCODE_J] && !prevKeyState[SDL_SCANCODE_J];
     if (attackPressed && player->attackCooldownTimer <= 0.0f && player->state != PLAYER_ATTACK) {
         StartAttack(player, PLAYER_ATTACK_COOLDOWN);
+        Audio_PlaySfx(SFX_ATTACK);
     }
 
     for (int i = 0; i < player->skillCount; i++) {
@@ -169,6 +230,7 @@ void Player_Update(Player *player, float dt, const Map *gameMap, HitboxList *hit
             // the attack-cooldown here just stops the swing animation from
             // being interrupted by another input on the very next frame.
             StartAttack(player, PLAYER_ATTACK_COOLDOWN);
+            Audio_PlaySfx(SFX_SKILL);
             activeSkillIndex = i;
         }
     }

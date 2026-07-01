@@ -1,4 +1,5 @@
 #include "game.h"
+#include "audio.h"
 #include "../world/tmj_loader.h"
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_render.h>
@@ -81,6 +82,18 @@ static const LevelConfig LEVELS[] = {
 
 // How close to the right edge the player must get to clear the level.
 #define LEVEL_EXIT_MARGIN 8.0f
+
+// --- Combat & camera "juice" ------------------------------------------------
+// Hit-stop is a tiny world-wide freeze the instant an attack connects; it makes
+// impacts read as heavy. Screen shake reinforces them. Look-ahead nudges the
+// camera in the direction the player faces so more of the level is visible.
+#define HITSTOP_ON_HIT    0.04f   // player landed a hit on an enemy/boss
+#define HITSTOP_ON_HURT   0.07f   // player got hit -- freeze reads as a bigger blow
+#define SHAKE_ON_HIT_MAG      2.5f
+#define SHAKE_ON_HIT_TIME     0.10f
+#define SHAKE_ON_HURT_MAG     5.0f
+#define SHAKE_ON_HURT_TIME    0.28f
+#define CAMERA_LOOKAHEAD  30.0f
 
 static Uint64 lastFpsTime = 0;
 static int frameCount = 0;
@@ -178,7 +191,17 @@ bool Game_Init(Game *game) {
 
     SDL_SetRenderLogicalPresentation(game->renderer, game->win.logW, game->win.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
+    // VSync gives evenly paced, tear-free frames -- the single biggest win for
+    // perceived smoothness. If the driver refuses it, main.c falls back to a
+    // fixed delay to cap the frame rate.
+    game->vsyncEnabled = SDL_SetRenderVSync(game->renderer, 1);
+    SDL_Log("VSync %s", game->vsyncEnabled ? "enabled" : "unavailable (using delay fallback)");
+
     TextureManager_Init(&game->textures, game->renderer);
+
+    // Audio is optional: if the device can't be opened the game still runs
+    // (silently), so a failure here doesn't fail Game_Init.
+    Audio_Init();
 
     Camera_Init(&game->camera, (float)game->win.logW, (float)game->win.logH);
 
@@ -192,6 +215,8 @@ bool Game_Init(Game *game) {
     game->state = GAME_PLAYING;
     game->prevTime = SDL_GetTicks();
     lastFpsTime = SDL_GetTicks();
+
+    Audio_PlayMusic(); // looping background track (no-op if music failed to load)
 
     SDL_Log("Game initialized. Window: %dx%d, logical: %dx%d",
             game->win.width, game->win.height, game->win.logW, game->win.logH);
@@ -208,6 +233,12 @@ void Game_HandleEvents(Game *game) {
                 break;
             case SDL_EVENT_WINDOW_RESIZED:
                 SDL_GetWindowSize(game->window, &game->win.width, &game->win.height);
+                break;
+            case SDL_EVENT_KEY_DOWN:
+                if (event.key.key == SDLK_M) {
+                    Audio_ToggleMute();
+                    SDL_Log("Audio %s", Audio_IsMuted() ? "muted" : "unmuted");
+                }
                 break;
         }
     }
@@ -231,17 +262,31 @@ static void Game_ResolveHitboxes(Game *game) {
                 if (Collision_RectOverlap(hb->rect, Enemy_GetBounds(&game->enemies[e]))) {
                     Enemy_TakeDamage(&game->enemies[e], hb->damage, hb->knockbackX, hb->knockbackY);
                     Hitbox_MarkHitEnemy(hb, e);
+                    Audio_PlaySfx(Enemy_IsAlive(&game->enemies[e]) ? SFX_ENEMY_HIT : SFX_ENEMY_DEATH);
+                    game->hitStopTimer = HITSTOP_ON_HIT;
+                    Camera_Shake(&game->camera, SHAKE_ON_HIT_MAG, SHAKE_ON_HIT_TIME);
                 }
             }
             if (game->bossPresent && !hb->hitBoss && Boss_IsAlive(&game->boss)) {
                 if (Collision_RectOverlap(hb->rect, Boss_GetBounds(&game->boss))) {
                     Boss_TakeDamage(&game->boss, hb->damage, hb->knockbackX, hb->knockbackY);
                     hb->hitBoss = true;
+                    Audio_PlaySfx(SFX_ENEMY_HIT);
+                    game->hitStopTimer = HITSTOP_ON_HIT;
+                    Camera_Shake(&game->camera, SHAKE_ON_HIT_MAG, SHAKE_ON_HIT_TIME);
                 }
             }
         } else if (hb->source == HITBOX_SOURCE_ENEMY || hb->source == HITBOX_SOURCE_BOSS) {
             if (!hb->hitPlayer && Collision_CircleRectOverlap(playerCircle, hb->rect)) {
+                int healthBefore = game->player.health;
                 Player_TakeDamage(&game->player, hb->damage, hb->knockbackX, hb->knockbackY);
+                // Only play the hurt cue when damage actually landed (the player
+                // has brief i-frames after a hit that swallow overlapping ones).
+                if (game->player.health < healthBefore) {
+                    Audio_PlaySfx(SFX_HURT);
+                    game->hitStopTimer = HITSTOP_ON_HURT;
+                    Camera_Shake(&game->camera, SHAKE_ON_HURT_MAG, SHAKE_ON_HURT_TIME);
+                }
                 hb->hitPlayer = true;
             }
         }
@@ -264,6 +309,14 @@ void Game_Update(Game *game) {
     game->prevTime = nowTime;
     if (game->deltaTime > 0.05f) game->deltaTime = 0.05f; // clamp to avoid huge steps on a stall
 
+    // Hit-stop: hold the simulation still for a few frames after an impact so
+    // the hit reads as weighty. We still burn real time off the timer, and
+    // rendering continues (the frozen frame is exactly what we want on screen).
+    if (game->hitStopTimer > 0.0f) {
+        game->hitStopTimer -= game->deltaTime;
+        return;
+    }
+
     if (game->state == GAME_PLAYING) {
         HitboxList_Update(&game->hitboxes, game->deltaTime);
 
@@ -280,13 +333,19 @@ void Game_Update(Game *game) {
         Game_ResolveHitboxes(game);
 
         Rect pb = Player_GetBounds(&game->player);
-        float camTargetX = pb.x + pb.width * 0.5f;
+        // Bias the camera ahead of the player in the direction they face so the
+        // player can see more of what's coming. The camera's own smoothing eases
+        // the shift when they turn around.
+        float lookAhead = game->player.flipHorizontal ? -CAMERA_LOOKAHEAD : CAMERA_LOOKAHEAD;
+        float camTargetX = pb.x + pb.width * 0.5f + lookAhead;
         float camTargetY = pb.y + pb.height * 0.5f;
         Camera_Follow(&game->camera, camTargetX, camTargetY, game->deltaTime);
         Camera_Update(&game->camera);
 
         if (!Player_IsAlive(&game->player)) {
             game->state = GAME_PLAYER_DEAD;
+            Audio_StopMusic();
+            Audio_PlaySfx(SFX_PLAYER_DEATH);
             SDL_Log("YOU DIED! Game Over.");
             return;
         }
@@ -296,6 +355,8 @@ void Game_Update(Game *game) {
         // Beating the final boss wins the game outright.
         if (isFinalLevel && game->bossPresent && !Boss_IsAlive(&game->boss)) {
             game->state = GAME_WIN;
+            Audio_StopMusic();
+            Audio_PlaySfx(SFX_VICTORY);
             SDL_Log("BOSS DEFEATED! You win!");
             return;
         }
@@ -388,6 +449,7 @@ void Game_Render(Game *game) {
 }
 
 void Game_Destroy(Game *game) {
+    Audio_Shutdown();
     Map_Free(&game->map);
     TextureManager_Destroy(&game->textures);
     if (game->renderer) SDL_DestroyRenderer(game->renderer);

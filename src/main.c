@@ -33,8 +33,11 @@ int main(int argc, char *argv[]) {
         Game_Update(game);
         Game_Render(game);
 
-        // 60 FPS cap. No v-sync yet.
-        SDL_Delay(16);
+        // With VSync on, the renderer paces frames for us (smoother, tear-free).
+        // Only fall back to a fixed delay when VSync couldn't be enabled.
+        if (!game->vsyncEnabled) {
+            SDL_Delay(16);
+        }
     }
 
     Game_Destroy(game);

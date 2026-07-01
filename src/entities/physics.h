@@ -8,6 +8,11 @@
 #define MAX_FALL_SPEED 600.0f
 #define JUMP_FORCE -420.0f
 
+// Falling pulls harder than rising. This is a classic "game feel" trick: the
+// jump keeps its full height on the way up (so level gaps stay clearable), but
+// the descent is snappier so jumps don't feel floaty. Applied only while vy > 0.
+#define FALL_GRAVITY_MULT 1.45f
+
 // A moving, collidable box. One Physics_Step() call moves it by its velocity,
 // resolves it against the map's solid tiles, and reports whether it ended the
 // step standing on the ground.

@@ -2,8 +2,8 @@
 #include "physics.h"
 #include <math.h>
 
-#define ENEMY_WIDTH 32.0f
-#define ENEMY_HEIGHT 44.0f
+#define ENEMY_WIDTH 44.0f
+#define ENEMY_HEIGHT 60.0f
 #define ENEMY_SPEED 60.0f
 #define ENEMY_ATTACK_RANGE 30.0f
 #define ENEMY_ATTACK_DAMAGE 10
@@ -21,6 +21,7 @@ void Enemy_Init(Enemy *enemy, float x, float y, SDL_Texture *texture) {
     enemy->health = ENEMY_MAX_HEALTH;
     enemy->maxHealth = ENEMY_MAX_HEALTH;
     enemy->state = ENEMY_IDLE;
+    enemy->flipHorizontal = false;
     enemy->texture = texture;
     enemy->attackCooldownTimer = 0.0f;
     enemy->attackHitboxSpawned = false;
@@ -68,6 +69,7 @@ void Enemy_Update(Enemy *enemy, Player *player, int enemyIndex, float dt, const 
         float distance = sqrtf(dx * dx + dy * dy);
 
         if (distance < ENEMY_DETECTION_RANGE) {
+            enemy->flipHorizontal = (dx < 0.0f); // turn to face the player
             if (distance > ENEMY_ATTACK_RANGE) {
                 enemy->velocityX = (dx > 0) ? ENEMY_SPEED : -ENEMY_SPEED;
                 if (enemy->state != ENEMY_ATTACK) enemy->state = ENEMY_RUN;
@@ -189,7 +191,8 @@ void Enemy_Render(Enemy *enemy, SDL_Renderer *renderer, const Camera *camera) {
             SDL_SetTextureColorMod(enemy->texture, 255, 255, 255);
         }
 
-        SDL_RenderTextureRotated(renderer, enemy->texture, &src, &dst, 0, NULL, SDL_FLIP_NONE);
+        SDL_RenderTextureRotated(renderer, enemy->texture, &src, &dst, 0, NULL,
+                (enemy->flipHorizontal) ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
     }
 
     SDL_FRect healthBarBg = { dst.x, dst.y - 5, ENEMY_WIDTH, 2 };

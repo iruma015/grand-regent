@@ -46,6 +46,10 @@ typedef struct {
     float hurtFlashTimer; // brief invulnerability/flash window after taking damage
     int activeSwingSkill; // -1 == normal attack; otherwise index into skills[] powering the current swing
 
+    // --- Platforming feel timers ---
+    float coyoteTimer;     // grace period after leaving a ledge during which a jump still fires
+    float jumpBufferTimer; // remembers a jump pressed slightly before landing, so it fires on touchdown
+
     // Circular hurtbox: this is what enemy/boss attacks are tested against.
     // Tune `hitboxRadius` (and the offsets in Player_GetCircle) to taste.
     float hitboxRadius;

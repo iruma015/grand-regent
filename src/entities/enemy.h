@@ -27,6 +27,7 @@ typedef struct {
     int maxHealth;
 
     EnemyState state;
+    bool flipHorizontal; // face the player instead of always facing one way
 
     Animation idleAnim;
     Animation runAnim;

@@ -31,9 +31,11 @@ typedef struct {
 
     bool running;
     GameState state;
+    bool vsyncEnabled;  // true if the renderer paces frames itself (no manual delay)
 
     float deltaTime;
     Uint64 prevTime;
+    float hitStopTimer; // brief, world-wide freeze on impact for combat "juice"
 
     Map map;
     Camera camera;
