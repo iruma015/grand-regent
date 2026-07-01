@@ -44,8 +44,10 @@ typedef struct {
     int maxHealth;
 
     BossState state;
+    bool facingRight; // which way the sprite faces (flips the texture when false)
 
     Animation idleAnim;
+    Animation walkAnim;  // played while chasing/patrolling
     Animation skillAnim; // reused for whichever skill is currently playing
 
     SDL_Texture *texture;
