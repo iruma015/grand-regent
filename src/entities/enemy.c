@@ -89,7 +89,9 @@ void Enemy_Update(Enemy *enemy, Player *player, int enemyIndex, float dt, const 
                     enemy->state = ENEMY_ATTACK;
                     enemy->attackCooldownTimer = ENEMY_ATTACK_COOLDOWN;
                     enemy->attackHitboxSpawned = false;
-                    Animation_Init(&enemy->attackAnim, 6, 0.1f);
+                    // Attack row is 8 frames -- play them all so the sword swing
+                    // and its trailing slash arc read fully (was cut to 6).
+                    Animation_Init(&enemy->attackAnim, 8, 0.1f);
                 } else if (enemy->state != ENEMY_ATTACK) {
                     enemy->state = ENEMY_IDLE;
                 }

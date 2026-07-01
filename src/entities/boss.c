@@ -7,8 +7,17 @@
 #define BOSS_HEIGHT 144.0f
 #define BOSS_SPEED 160.0f
 #define BOSS_DETECTION_RANGE 460.0f
-#define BOSS_MAX_HEALTH 200
+#define BOSS_MAX_HEALTH 800
 #define BOSS_HURT_TIME 0.25f
+
+// --- Jumping ---------------------------------------------------------------
+// The boss leaps to chase a player who's gotten above it (jumped up or onto a
+// ledge). A heavier-than-player jump force reads as a big lunge; the cooldown
+// keeps it from hopping every frame. BOSS_JUMP_TRIGGER_H is how far above the
+// boss the player must be before a leap fires.
+#define BOSS_JUMP_FORCE      -820.0f
+#define BOSS_JUMP_COOLDOWN    1.5f
+#define BOSS_JUMP_TRIGGER_H   40.0f
 
 // --- Sprite sheet layout (assets/boss/boss.png) ----------------------------
 // 4608x480 sheet = a 16-column x 3-row grid of 288x160 frames:
@@ -34,8 +43,8 @@
 // reuse the single attack row, so animFrames is the row's 16 and frameDuration
 // is ~(windupTime + activeTime)/16 so one swing fills the telegraph + strike.
 static const BossSkillDef BOSS_SKILLS[] = {
-    { "Slash",       2.0f, 110.0f, 15, 0.30f, 0.15f, 0.30f, BOSS_ATTACK_FRAMES, 0.028f },
-    { "Heavy Smash",  3.5f, 150.0f, 25, 0.50f, 0.25f, 0.55f, BOSS_ATTACK_FRAMES, 0.047f },
+    { "Slash",       2.0f, 110.0f, 10, 0.30f, 0.15f, 0.30f, BOSS_ATTACK_FRAMES, 0.028f },
+    { "Heavy Smash",  3.5f, 150.0f, 16, 0.50f, 0.25f, 0.55f, BOSS_ATTACK_FRAMES, 0.047f },
 };
 #define BOSS_SKILL_COUNT (int)(sizeof(BOSS_SKILLS) / sizeof(BOSS_SKILLS[0]))
 
@@ -48,6 +57,9 @@ void Boss_Init(Boss *boss, float x, float y, SDL_Texture *texture, float mapPixe
     boss->maxHealth = BOSS_MAX_HEALTH;
     boss->state = BOSS_IDLE;
     boss->facingRight = true;
+    boss->isGrounded = false;
+    boss->aggroed = false;
+    boss->jumpCooldownTimer = 0.0f;
     boss->texture = texture;
 
     boss->skills = BOSS_SKILLS;
@@ -105,11 +117,17 @@ void Boss_Update(Boss *boss, Player *player, float dt, const Map *gameMap, Hitbo
     for (int i = 0; i < boss->skillCount; i++) {
         if (boss->skillCooldowns[i] > 0.0f) boss->skillCooldowns[i] -= dt;
     }
+    if (boss->jumpCooldownTimer > 0.0f) boss->jumpCooldownTimer -= dt;
 
     float dx = player->x - boss->x;
     float dy = player->y - boss->y;
     float distance = sqrtf(dx * dx + dy * dy);
     bool facingRight = dx >= 0.0f;
+
+    // Latch aggro the moment the player is first noticed -- this is the "boss
+    // fight has begun" signal the game uses to swap in the boss theme. It stays
+    // set for the rest of the fight even if the player briefly retreats.
+    if (distance < BOSS_DETECTION_RANGE) boss->aggroed = true;
 
     switch (boss->state) {
         case BOSS_IDLE: {
@@ -119,9 +137,19 @@ void Boss_Update(Boss *boss, Player *player, float dt, const Map *gameMap, Hitbo
 
                 if (distance > engageRange) {
                     boss->velocityX = facingRight ? BOSS_SPEED : -BOSS_SPEED;
+                    // Leap after a player who's climbed above us (jumped or on a
+                    // ledge) -- the boss can't otherwise reach higher ground.
+                    if (boss->isGrounded && boss->jumpCooldownTimer <= 0.0f &&
+                        dy < -BOSS_JUMP_TRIGGER_H) {
+                        boss->velocityY = BOSS_JUMP_FORCE;
+                        boss->isGrounded = false;
+                        boss->jumpCooldownTimer = BOSS_JUMP_COOLDOWN;
+                    }
                 } else {
                     boss->velocityX = 0.0f;
-                    int next = ChooseReadySkill(boss);
+                    // Only wind up an attack with both feet on the ground, so a
+                    // leap plays out as movement instead of a mid-air swing.
+                    int next = boss->isGrounded ? ChooseReadySkill(boss) : -1;
                     if (next != -1) {
                         boss->currentSkill = next;
                         boss->state = BOSS_WINDUP;
@@ -141,8 +169,9 @@ void Boss_Update(Boss *boss, Player *player, float dt, const Map *gameMap, Hitbo
             // Face the way we're moving, or toward the player when standing to
             // attack. This gets locked in for the swing once WINDUP begins.
             boss->facingRight = (boss->velocityX != 0.0f) ? (boss->velocityX > 0.0f) : facingRight;
-            if (boss->velocityX != 0.0f) Animation_Update(&boss->walkAnim, dt);
-            else                         Animation_Update(&boss->idleAnim, dt);
+            // Walk cycle while striding or airborne; idle sway only when planted.
+            if (boss->velocityX != 0.0f || !boss->isGrounded) Animation_Update(&boss->walkAnim, dt);
+            else                                              Animation_Update(&boss->idleAnim, dt);
             break;
         }
 
@@ -208,6 +237,7 @@ void Boss_Update(Boss *boss, Player *player, float dt, const Map *gameMap, Hitbo
     boss->y = body.y;
     boss->velocityX = body.vx;
     boss->velocityY = body.vy;
+    boss->isGrounded = body.grounded;
 
     if (boss->health <= 0) {
         boss->state = BOSS_DEAD;
@@ -269,7 +299,7 @@ void Boss_Render(Boss *boss, SDL_Renderer *renderer, const Camera *camera) {
         int row;
         if (boss->state == BOSS_WINDUP || boss->state == BOSS_ACTIVE) {
             anim = &boss->skillAnim;  row = BOSS_ROW_ATTACK;
-        } else if (boss->state == BOSS_IDLE && boss->velocityX != 0.0f) {
+        } else if (boss->state == BOSS_IDLE && (boss->velocityX != 0.0f || !boss->isGrounded)) {
             anim = &boss->walkAnim;   row = BOSS_ROW_WALK;
         } else {
             anim = &boss->idleAnim;   row = BOSS_ROW_IDLE;

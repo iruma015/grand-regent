@@ -50,8 +50,8 @@ static const LevelConfig LEVELS[] = {
     {
         .mapPath = "assets/maps/1-nArea.tmj",
         .player  = { 60.0f, 420.0f },
-        .enemies = { {400.0f, 430.0f}, {560.0f, 430.0f}, {720.0f, 430.0f} },
-        .enemyCount = 3,
+        .enemies = {},                //{ {400.0f, 430.0f}, {560.0f, 430.0f}, {720.0f, 430.0f} },
+        .enemyCount = 0,
         .hasBoss = false,
         .exitX = 0.0f, // use the map's right edge
     },
@@ -63,8 +63,8 @@ static const LevelConfig LEVELS[] = {
         .mapPath = "assets/maps/2-nArea.tmj",
         .player  = { 60.0f, 560.0f },
         // Two on the upper-left ledge, two in the lower pocket you fall into.
-        .enemies = { {250.0f, 560.0f}, {420.0f, 560.0f}, {520.0f, 1080.0f}, {650.0f, 1080.0f} },
-        .enemyCount = 4,
+        .enemies = { {250.0f, 560.0f}, {520.0f, 1080.0f}, {650.0f, 1080.0f} },
+        .enemyCount = 3,
         .hasBoss = false,
         .exitX = 1380.0f, // reachable top of the right staircase, before the wall
     },
@@ -74,8 +74,8 @@ static const LevelConfig LEVELS[] = {
     {
         .mapPath = "assets/maps/3-nArea.tmj",
         .player  = { 60.0f, 900.0f },
-        .enemies = { {700.0f, 900.0f}, {950.0f, 900.0f} },
-        .enemyCount = 2,
+        .enemies = {},
+        .enemyCount = 0,
         .hasBoss = true,
         .boss    = { 1050.0f, 860.0f },
     },
@@ -613,6 +613,12 @@ void Game_Update(Game *game) {
 
         if (game->bossPresent) {
             Boss_Update(&game->boss, &game->player, game->deltaTime, &game->map, &game->hitboxes);
+            // Once the boss has noticed the player (met + chasing), swap the
+            // ambient track for the boss theme. PlayBossMusic is idempotent, so
+            // calling it every frame just keeps the same loop going.
+            if (game->boss.aggroed && Boss_IsAlive(&game->boss)) {
+                Audio_PlayBossMusic();
+            }
         }
 
         Game_ResolveHitboxes(game);
@@ -769,6 +775,7 @@ void Game_Render(Game *game) {
         frameCount = 0;
         lastFpsTime = currentTime;
 
+        // title bar
         char title[160];
         SDL_snprintf(title, sizeof(title), "Grand Regent - FPS: %d | HP: %d | Boss: %s",
                      fps, game->player.health,

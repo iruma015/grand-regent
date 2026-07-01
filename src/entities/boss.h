@@ -45,6 +45,9 @@ typedef struct {
 
     BossState state;
     bool facingRight; // which way the sprite faces (flips the texture when false)
+    bool isGrounded;  // resting on a floor last physics step (gates jumping)
+    bool aggroed;     // latches true once the player is first noticed (cues boss music)
+    float jumpCooldownTimer; // time until the boss may leap again
 
     Animation idleAnim;
     Animation walkAnim;  // played while chasing/patrolling

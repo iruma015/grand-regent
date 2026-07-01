@@ -29,7 +29,8 @@ typedef enum {
 bool Audio_Init(void);
 
 void Audio_PlaySfx(Sfx id);
-void Audio_PlayMusic(void);   // start (or restart) the looping background track
+void Audio_PlayMusic(void);       // start the looping ambient/background track
+void Audio_PlayBossMusic(void);   // swap to the looping boss-fight theme
 void Audio_StopMusic(void);
 
 void Audio_ToggleMute(void);
