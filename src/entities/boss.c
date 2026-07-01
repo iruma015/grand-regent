@@ -304,12 +304,12 @@ void Boss_Render(Boss *boss, SDL_Renderer *renderer, const Camera *camera) {
         SDL_RenderRect(renderer, &border);
     }
 
-    SDL_FRect healthBarBg = { bodyDst.x, barY, BOSS_WIDTH, 5 };
-    SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
-    SDL_RenderFillRect(renderer, &healthBarBg);
+    // SDL_FRect healthBarBg = { bodyDst.x, barY, BOSS_WIDTH, 5 };
+    // SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
+    // SDL_RenderFillRect(renderer, &healthBarBg);
 
-    float healthPercent = (float)boss->health / (float)boss->maxHealth;
-    SDL_FRect healthBar = { bodyDst.x, barY, BOSS_WIDTH * healthPercent, 5 };
-    SDL_SetRenderDrawColor(renderer, 255, 100, 0, 255);
-    SDL_RenderFillRect(renderer, &healthBar);
+    // float healthPercent = (float)boss->health / (float)boss->maxHealth;
+    // SDL_FRect healthBar = { bodyDst.x, barY, BOSS_WIDTH * healthPercent, 5 };
+    // SDL_SetRenderDrawColor(renderer, 255, 100, 0, 255);
+    // SDL_RenderFillRect(renderer, &healthBar);
 }

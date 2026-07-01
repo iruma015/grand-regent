@@ -17,7 +17,7 @@
 // centered horizontally over it and bottom-aligned (feet on the ground).
 #define ENEMY_RENDER_WIDTH  96.0f
 #define ENEMY_RENDER_HEIGHT 96.0f
-#define ENEMY_MAX_HEALTH 30
+#define ENEMY_MAX_HEALTH 45
 #define ENEMY_HURT_TIME 0.2f
 
 void Enemy_Init(Enemy *enemy, float x, float y, SDL_Texture *texture) {

@@ -17,8 +17,7 @@ int main(int argc, char *argv[]) {
     game->win.height = 900;
     // Logical (render) resolution. Smaller = more zoomed in, so everything on
     // screen looks bigger. 960x540 is 16:9 like the window, so it scales up
-    // cleanly with no letterbox bars, and shows ~30 tiles across — matching the
-    // original SDL2 build's zoom. Lower these to zoom in further.
+    // cleanly with no letterbox bars, and shows ~30 tiles across.
     game->win.logW = 960;
     game->win.logH = 540;
 

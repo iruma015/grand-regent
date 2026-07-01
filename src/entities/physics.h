@@ -10,7 +10,7 @@
 // than a tiny half-height hop at the more zoomed-out scale.
 #define GRAVITY 1800.0f
 #define MAX_FALL_SPEED 1200.0f
-#define JUMP_FORCE -840.0f
+#define JUMP_FORCE -720.0f
 
 // Falling pulls harder than rising. This is a classic "game feel" trick: the
 // jump keeps its full height on the way up (so level gaps stay clearable), but

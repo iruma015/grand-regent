@@ -657,40 +657,40 @@ void Game_Update(Game *game) {
     }
 }
 
-// Draws a circle outline (screen space) as a ring of line segments.
-static void DrawCircleOutline(SDL_Renderer *renderer, float cx, float cy, float radius) {
-    const int segments = 24;
-    float prevX = cx + radius, prevY = cy;
-    for (int i = 1; i <= segments; i++) {
-        float a = (float)i / segments * 2.0f * (float)SDL_PI_D;
-        float x = cx + radius * SDL_cosf(a);
-        float y = cy + radius * SDL_sinf(a);
-        SDL_RenderLine(renderer, prevX, prevY, x, y);
-        prevX = x;
-        prevY = y;
-    }
-}
+// // Draws a circle outline (screen space) as a ring of line segments.
+// static void DrawCircleOutline(SDL_Renderer *renderer, float cx, float cy, float radius) {
+//     const int segments = 24;
+//     float prevX = cx + radius, prevY = cy;
+//     for (int i = 1; i <= segments; i++) {
+//         float a = (float)i / segments * 2.0f * (float)SDL_PI_D;
+//         float x = cx + radius * SDL_cosf(a);
+//         float y = cy + radius * SDL_sinf(a);
+//         SDL_RenderLine(renderer, prevX, prevY, x, y);
+//         prevX = x;
+//         prevY = y;
+//     }
+// }
 
-static void RenderHitboxDebug(Game *game) {
-    // Attack hitboxes (yellow rectangles)
-    SDL_SetRenderDrawColor(game->renderer, 255, 255, 0, 120);
-    for (int i = 0; i < game->hitboxes.count; i++) {
-        SDL_FRect worldRect = {
-            game->hitboxes.boxes[i].rect.x, game->hitboxes.boxes[i].rect.y,
-            game->hitboxes.boxes[i].rect.width, game->hitboxes.boxes[i].rect.height
-        };
-        SDL_FRect screenRect = Camera_ToScreen(&game->camera, worldRect);
-        SDL_RenderRect(game->renderer, &screenRect);
-    }
+// static void RenderHitboxDebug(Game *game) {
+//     // Attack hitboxes (yellow rectangles)
+//     SDL_SetRenderDrawColor(game->renderer, 255, 255, 0, 120);
+//     for (int i = 0; i < game->hitboxes.count; i++) {
+//         SDL_FRect worldRect = {
+//             game->hitboxes.boxes[i].rect.x, game->hitboxes.boxes[i].rect.y,
+//             game->hitboxes.boxes[i].rect.width, game->hitboxes.boxes[i].rect.height
+//         };
+//         SDL_FRect screenRect = Camera_ToScreen(&game->camera, worldRect);
+//         SDL_RenderRect(game->renderer, &screenRect);
+//     }
 
-    // Player circular hurtbox (cyan ring) -- handy while tuning the radius
-    Circle pc = Player_GetCircle(&game->player);
-    SDL_SetRenderDrawColor(game->renderer, 0, 220, 255, 200);
-    DrawCircleOutline(game->renderer,
-                      Camera_ToScreenX(&game->camera, pc.cx),
-                      Camera_ToScreenY(&game->camera, pc.cy),
-                      pc.radius);
-}
+//     // Player circular hurtbox (cyan ring) -- handy while tuning the radius
+//     Circle pc = Player_GetCircle(&game->player);
+//     SDL_SetRenderDrawColor(game->renderer, 0, 220, 255, 200);
+//     DrawCircleOutline(game->renderer,
+//                       Camera_ToScreenX(&game->camera, pc.cx),
+//                       Camera_ToScreenY(&game->camera, pc.cy),
+//                       pc.radius);
+// }
 
 // Draws the menu overlay for whatever non-playing state we're in. The item
 // lists here mirror Game_MenuItemCount / Game_MenuActivate.
@@ -753,7 +753,7 @@ void Game_Render(Game *game) {
     // Debug outlines and the HUD belong to live play; menus draw over a frozen,
     // clean world instead.
     if (game->state == GAME_PLAYING || game->state == GAME_PAUSED) {
-        RenderHitboxDebug(game);
+        // RenderHitboxDebug(game);
         UI_RenderHUD(game);
     }
     if (game->state != GAME_PLAYING) {

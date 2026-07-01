@@ -16,8 +16,8 @@
 // the original SDL2 build (which rendered the 64px frame at SPRITE_SCALE=2).
 // The physics/collision body stays PLAYER_WIDTH x PLAYER_HEIGHT; the sprite is
 // centered horizontally over it and bottom-aligned so the feet rest on ground.
-#define PLAYER_RENDER_WIDTH  128.0f
-#define PLAYER_RENDER_HEIGHT 128.0f
+#define PLAYER_RENDER_WIDTH  104.0f
+#define PLAYER_RENDER_HEIGHT 104.0f
 
 // --- Movement feel ---------------------------------------------------------
 // Rather than snapping horizontal velocity to ±SPEED (which feels robotic), the
@@ -411,16 +411,16 @@ void Player_Render(Player *player, SDL_Renderer *renderer, const Camera *camera)
                 (player->flipHorizontal) ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
     }
 
-    // Health bar sits over the body's width, just above the character's head
-    // (near the top of the sprite frame, which is where the character starts).
-    float barX = bodyDst.x;
-    float barY = dst.y + 6.0f;
-    SDL_FRect healthBarBg = { barX, barY, PLAYER_WIDTH, 3 };
-    SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
-    SDL_RenderFillRect(renderer, &healthBarBg);
+    // // Health bar sits over the body's width, just above the character's head
+    // // (near the top of the sprite frame, which is where the character starts).
+    // float barX = bodyDst.x;
+    // float barY = dst.y + 6.0f;
+    // SDL_FRect healthBarBg = { barX, barY, PLAYER_WIDTH, 3 };
+    // SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
+    // SDL_RenderFillRect(renderer, &healthBarBg);
 
-    float healthPercent = (float)player->health / (float)player->maxHealth;
-    SDL_FRect healthBar = { barX, barY, PLAYER_WIDTH * healthPercent, 3 };
-    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-    SDL_RenderFillRect(renderer, &healthBar);
+    // float healthPercent = (float)player->health / (float)player->maxHealth;
+    // SDL_FRect healthBar = { barX, barY, PLAYER_WIDTH * healthPercent, 3 };
+    // SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+    // SDL_RenderFillRect(renderer, &healthBar);
 }
